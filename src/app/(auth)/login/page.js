@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema } from "@/lib/validations/auth";
@@ -19,9 +19,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, MailCheck } from "lucide-react";
 
-export default function LoginPage() {
+function ConfirmationBanner() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("confirm") !== "1") return null;
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+      <MailCheck className="mt-0.5 h-4 w-4 shrink-0" />
+      <p>
+        We sent a confirmation email to your address. Click the link in it,
+        then sign in here.
+      </p>
+    </div>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
@@ -36,15 +50,12 @@ export default function LoginPage() {
 
   async function onSubmit(data) {
     setLoading(true);
-
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
-
       if (error) throw error;
-
       toast.success("Welcome back!");
       router.push("/dashboard");
       router.refresh();
@@ -115,5 +126,16 @@ export default function LoginPage() {
         </CardFooter>
       </form>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <>
+      <Suspense>
+        <ConfirmationBanner />
+      </Suspense>
+      <LoginForm />
+    </>
   );
 }

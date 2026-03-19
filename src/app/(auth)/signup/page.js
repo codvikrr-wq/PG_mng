@@ -38,11 +38,12 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // 1. Create auth user
+      // 1. Create the auth user (browser client — establishes session cookie)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
           data: {
             first_name: data.firstName,
             last_name: data.lastName,
@@ -52,52 +53,36 @@ export default function SignupPage() {
       });
 
       if (authError) throw authError;
+      if (!authData.user) throw new Error("Failed to create account");
 
-      if (authData.user) {
-        // 2. Create organization
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .insert({
-            name: data.orgName,
-            slug: data.orgName.toLowerCase().replace(/\s+/g, "-"),
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            currency: "INR",
-          })
-          .select()
-          .single();
+      // 2. Complete setup via service-role API route — works regardless of
+      //    whether email confirmation is enabled (no session needed server-side)
+      const res = await fetch("/api/auth/complete-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: authData.user.id,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          orgName: data.orgName,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      });
 
-        if (orgError) throw orgError;
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Setup failed");
 
-        // 3. Update user record with org_id
-        const { error: userError } = await supabase
-          .from("users")
-          .update({
-            organization_id: org.id,
-            first_name: data.firstName,
-            last_name: data.lastName,
-          })
-          .eq("id", authData.user.id);
-
-        if (userError) throw userError;
-
-        // 4. Find Org Admin role and assign it
-        const { data: adminRole } = await supabase
-          .from("roles")
-          .select("id")
-          .eq("organization_id", org.id)
-          .eq("name", "Org Admin")
-          .single();
-
-        if (adminRole) {
-          await supabase.from("user_roles").insert({
-            user_id: authData.user.id,
-            role_id: adminRole.id,
-            organization_id: org.id,
-          });
-        }
-
-        toast.success("Account created! Redirecting to onboarding...");
+      // 3. Handle email-confirmation-required vs auto-confirmed
+      if (authData.session) {
+        // Email confirmation is OFF — user is signed in immediately
+        toast.success("Account created! Let's set up your workspace.");
         router.push("/onboarding");
+      } else {
+        // Email confirmation is ON — user must verify email first
+        toast.success(
+          "Check your email to confirm your account, then sign in."
+        );
+        router.push("/login?confirm=1");
       }
     } catch (error) {
       console.error("Signup error:", error);
