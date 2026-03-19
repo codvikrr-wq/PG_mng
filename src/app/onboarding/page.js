@@ -170,11 +170,17 @@ export default function OnboardingPage() {
         .single();
 
       for (const email of emails) {
+        const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
         await supabase.from("invitations").insert({
           organization_id: profile.organization_id,
           email,
           role_id: role.id,
           invited_by: user.id,
+          token,
+          status: "pending",
+          expires_at: expiresAt.toISOString(),
         });
       }
 

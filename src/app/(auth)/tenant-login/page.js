@@ -42,7 +42,8 @@ export default function TenantLoginPage() {
       const { error } = await supabase.auth.signInWithOtp({
         email: data.email,
         options: {
-          shouldCreateUser: false,
+          shouldCreateUser: true,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/tenant/dashboard`,
         },
       });
 
