@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
@@ -103,10 +104,12 @@ export function AppSidebar() {
       <SidebarHeader className="border-b px-4 py-3">
         <div className="flex items-center gap-2">
           {organization?.branding?.logo_url ? (
-            <img
+            <Image
               src={organization.branding.logo_url}
               alt={organization.name}
-              className="h-8 w-8 rounded-md object-cover"
+              width={32}
+              height={32}
+              className="rounded-md object-cover"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-bold">

@@ -267,6 +267,7 @@ export default function FinanceReportsPage() {
         <Card>
           <CardHeader><CardTitle className="text-base">Top Overdue Tenants</CardTitle></CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -287,6 +288,7 @@ export default function FinanceReportsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

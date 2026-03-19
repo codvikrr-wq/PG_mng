@@ -188,7 +188,7 @@ export default function AbsencesPage() {
           description="No tenants have reported absences"
         />
       ) : (
-        <div className="rounded-md border">
+        <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>

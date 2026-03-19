@@ -4,6 +4,11 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
+export const metadata = {
+  title: { template: "%s | PG Manager", default: "PG Manager" },
+  description: "Manage your PG properties, tenants, finances, and more.",
+};
+
 export default function DashboardLayout({ children }) {
   return (
     <UserProvider>

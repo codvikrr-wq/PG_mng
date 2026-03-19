@@ -2,6 +2,11 @@ import { UserProvider } from "@/context/user-context";
 import { OrgProvider } from "@/context/org-context";
 import { TenantNav } from "@/components/layout/tenant-nav";
 
+export const metadata = {
+  title: { template: "%s | My PG", default: "My PG" },
+  description: "Your PG tenant portal — invoices, complaints, food, and more.",
+};
+
 export default function TenantPortalLayout({ children }) {
   return (
     <UserProvider>

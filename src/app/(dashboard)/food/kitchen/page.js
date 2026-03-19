@@ -194,6 +194,7 @@ export default function KitchenPage() {
             <EmptyState icon={UtensilsCrossed} title="No orders" description={`No meal orders for ${format(selectedDate, "MMM d, yyyy")}`} />
           ) : (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -236,6 +237,7 @@ export default function KitchenPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
 

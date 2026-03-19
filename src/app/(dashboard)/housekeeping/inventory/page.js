@@ -202,7 +202,7 @@ export default function InventoryPage() {
           action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Add Item</Button>}
         />
       ) : (
-        <div className="rounded-md border">
+        <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>

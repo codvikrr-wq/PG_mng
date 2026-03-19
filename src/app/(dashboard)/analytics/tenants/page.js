@@ -251,6 +251,7 @@ export default function TenantAnalyticsPage() {
         </CardHeader>
         <CardContent>
           {recentCheckIns.length > 0 ? (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -277,6 +278,7 @@ export default function TenantAnalyticsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">No recent check-ins</p>
           )}
@@ -290,6 +292,7 @@ export default function TenantAnalyticsPage() {
         </CardHeader>
         <CardContent>
           {recentCheckOuts.length > 0 ? (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -316,6 +319,7 @@ export default function TenantAnalyticsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">No recent check-outs</p>
           )}

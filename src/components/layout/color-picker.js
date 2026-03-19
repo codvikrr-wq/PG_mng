@@ -86,16 +86,18 @@ export function applyPrimaryColor(hex) {
   root.style.setProperty("--ring", `${h} ${s}% ${l}%`);
 }
 
+function getInitialColor() {
+  if (typeof window === "undefined") return "#007BFF";
+  return localStorage.getItem("pg-primary-color") || "#007BFF";
+}
+
 export function ColorPicker() {
-  const [color, setColor] = useState("#007BFF");
+  const [color, setColor] = useState(getInitialColor);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("pg-primary-color");
-    if (saved) {
-      setColor(saved);
-      applyPrimaryColor(saved);
-    }
+    if (saved) applyPrimaryColor(saved);
   }, []);
 
   function handleColorChange(hex) {

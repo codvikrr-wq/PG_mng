@@ -1084,7 +1084,7 @@ export default function TenantDetailPage() {
                   No invoices found for this tenant
                 </p>
               ) : (
-                <div className="rounded-md border">
+                <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1150,7 +1150,7 @@ export default function TenantDetailPage() {
                   No complaints filed by this tenant
                 </p>
               ) : (
-                <div className="rounded-md border">
+                <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1214,7 +1214,7 @@ export default function TenantDetailPage() {
                   No absence reports for this tenant
                 </p>
               ) : (
-                <div className="rounded-md border">
+                <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>

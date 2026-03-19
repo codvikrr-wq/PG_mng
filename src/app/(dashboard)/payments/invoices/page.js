@@ -437,7 +437,7 @@ export default function InvoicesPage() {
           />
         )
       ) : (
-        <div className="rounded-md border">
+        <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -725,7 +725,7 @@ export default function InvoicesPage() {
 
               {/* Line items */}
               {viewInvoice.line_items && viewInvoice.line_items.length > 0 && (
-                <div className="border rounded-md">
+                <div className="overflow-x-auto border rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>

@@ -1,19 +1,23 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { loadStripe } from "@stripe/stripe-js";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/context/user-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { FileText, IndianRupee, Calendar, Eye } from "lucide-react";
+import { FileText, IndianRupee, Calendar, CreditCard, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 const statusConfig = {
   draft: { label: "Draft", color: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400" },
@@ -34,6 +38,7 @@ export default function TenantInvoicesPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [paying, setPaying] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -64,6 +69,40 @@ export default function TenantInvoicesPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  async function handlePayNow(invoice) {
+    if (!stripePromise) {
+      toast.error("Online payment not configured");
+      return;
+    }
+    setPaying(true);
+    try {
+      const res = await fetch("/api/stripe/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      });
+      const { clientSecret, error } = await res.json();
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      const stripe = await stripePromise;
+      const { error: stripeError } = await stripe.redirectToCheckout
+        ? { error: null }
+        : await stripe.confirmPayment({
+            clientSecret,
+            confirmParams: {
+              return_url: `${window.location.origin}/tenant/invoices?paid=1`,
+            },
+          });
+      if (stripeError) toast.error(stripeError.message);
+    } catch {
+      toast.error("Payment failed. Please try again.");
+    } finally {
+      setPaying(false);
+    }
+  }
 
   async function openDetail(invoice) {
     setSelected(invoice);
@@ -168,6 +207,21 @@ export default function TenantInvoicesPage() {
                   <p className="text-sm text-muted-foreground">
                     Due: {format(new Date(selected.due_date), "MMM d, yyyy")}
                   </p>
+                )}
+
+                {/* Pay Now button for unpaid invoices */}
+                {["sent", "partial", "overdue"].includes(selected.status) && (
+                  <Button
+                    className="w-full"
+                    onClick={() => handlePayNow(selected)}
+                    disabled={paying || !stripePromise}
+                  >
+                    {paying ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
+                    ) : (
+                      <><CreditCard className="mr-2 h-4 w-4" />Pay Now</>
+                    )}
+                  </Button>
                 )}
 
                 {/* Line Items */}

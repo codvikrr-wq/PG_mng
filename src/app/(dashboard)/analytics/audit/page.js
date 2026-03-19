@@ -73,11 +73,6 @@ export default function AuditLogPage() {
   // Expanded rows (collapsible alternative)
   const [expandedRows, setExpandedRows] = useState(new Set());
 
-  useEffect(() => {
-    if (!organization) return;
-    fetchLogs(true);
-  }, [organization, entityType, actionFilter, dateRange]);
-
   async function fetchLogs(reset = false) {
     if (reset) {
       setLoading(true);
@@ -151,6 +146,13 @@ export default function AuditLogPage() {
     setLoading(false);
     setLoadingMore(false);
   }
+
+  useEffect(() => {
+    if (!organization) return;
+    fetchLogs(true);
+    // fetchLogs is defined above and stable within this render cycle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organization, entityType, actionFilter, dateRange]);
 
   function toggleRow(id) {
     setExpandedRows((prev) => {
@@ -299,6 +301,7 @@ export default function AuditLogPage() {
         <CardContent className="p-0">
           {logs.length > 0 ? (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -396,6 +399,7 @@ export default function AuditLogPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {hasMore && (
                 <div className="flex justify-center p-4 border-t">
