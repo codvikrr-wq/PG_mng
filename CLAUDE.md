@@ -1,8 +1,15 @@
 # PG Management SaaS — Claude Code Context
 
-> This file is read automatically by Claude Code on startup.
-> It contains the full current project status and next steps.
-> Always read this file AND the spec docs (PRD.md, design_doc.md, tech_stack.md) before doing any work.
+> **For Claude Code:** Read this file first, then read `TODOS.md` for the full task list with completion status.
+> This file has architecture context, patterns, and a quick "what's next" summary.
+> `TODOS.md` is the canonical source of truth for what's done (`[x]`) and what's pending (`[ ]`).
+> Also read `PRD.md` (product spec), `design_doc.md` (UI/UX), `tech_stack.md` (architecture rules) before doing any work.
+>
+> **Quick start prompt for Claude Code:**
+> "Read CLAUDE.md and TODOS.md. Phases 0–16 are complete (44 routes, zero build errors).
+> Continue from Phase 17 (Polish & UX): build the invitation acceptance page at /invite/[token],
+> add the 404/error pages, verify all list pages show EmptyState, add loading skeletons to any
+> pages missing them, and ensure all forms show success/error toasts. Follow all patterns in CLAUDE.md."
 
 ---
 
