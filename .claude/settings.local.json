@@ -1,9 +1,51 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(pnpm --version)",
       "Bash(npm install:*)",
-      "Bash(pnpm dlx:*)"
-    ]
-  }
+      "Bash(pnpm dlx:*)",
+      "Bash(git config:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(where psql:*)",
+      "Bash(powershell -Command \"[System.Environment]::SetEnvironmentVariable\\(''PATH'', [System.Environment]::GetEnvironmentVariable\\(''PATH'',''User''\\) + '';C:\\\\Users\\\\rubai\\\\.local\\\\bin'', ''User''\\); Write-Host ''PATH updated. Current claude path:''; where.exe claude 2>$null || Write-Host ''\\(restart terminal to take effect\\)''\")",
+      "Bash(powershell -Command \"$current = [System.Environment]::GetEnvironmentVariable\\(''PATH'',''User''\\); if \\($current -notlike ''*\\\\.local\\\\bin*''\\) { [System.Environment]::SetEnvironmentVariable\\(''PATH'', $current + '';C:\\\\Users\\\\rubai\\\\.local\\\\bin'', ''User''\\); Write-Host ''PATH updated successfully'' } else { Write-Host ''Path already contains .local\\\\bin'' }\")",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { $current = [System.Environment]::GetEnvironmentVariable\\(''PATH'',''User''\\); [System.Environment]::SetEnvironmentVariable\\(''PATH'', $current + '';C:\\\\Users\\\\rubai\\\\.local\\\\bin'', ''User''\\); Write-Host ''PATH updated successfully'' }\")",
+      "Bash(cmd.exe /c \"for /f \"\"tokens=*\"\" %i in \\(''powershell.exe -NoProfile -Command \"\"[System.Environment]::GetEnvironmentVariable\\(\\\\\"\"PATH\\\\\"\",\\\\\"\"User\\\\\"\"\\)\"\"''\\) do setx PATH \"\"%i;C:\\\\Users\\\\rubai\\\\.local\\\\bin\"\"\")",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\rubai\\\\AppData\\\\Local\\\\Temp\\\\addpath.ps1\")",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_tables",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Work_R&R/PGManagement/**)",
+      "Bash(done)",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(pnpm build:*)",
+      "Bash(Remove-Item \"C:\\\\Work_R&R\\\\PGManagement\\\\public\\\\logo_new_bg.png\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Work_R&R\\\\PGManagement\\\\.next\" -Recurse -Force)",
+      "Bash(find \"C:/Work_R&R/PGManagement/src/app/api/invite\" -type f)",
+      "Bash(find \"C:/Work_R&R/PGManagement/src/app/\\(dashboard\\)/tenants/new\" -type f)",
+      "Bash(ls \"C:/Work_R&R/PGManagement/src/app\")",
+      "Bash(find:*)",
+      "Bash(xargs -I{} bash -c \"grep -L \"\"finally\"\" \"\"{}\"\" | echo \"\"{}\"\"\")",
+      "Bash(grep -n \"full_name\\\\|photo_url\\\\|room_number\\\\|monthly_rent\\\\|sent_at\\\\|subtotal\" src/app/\\\\\\(dashboard\\\\\\)/tenants/[id]/page.js)",
+      "Skill(update-config)",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/payments/expenses/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/payments/reports/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/complaints/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/absences/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/notices/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/events/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/food/plans/page.js')",
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/tenants/\\\\[id\\\\]/page.js')"
+    ],
+    "defaultMode": "bypassPermissions"
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
