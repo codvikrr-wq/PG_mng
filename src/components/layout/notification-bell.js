@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { Bell, BellDot, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/context/user-context";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Popover,
   PopoverContent,
@@ -82,13 +83,10 @@ export function NotificationBell() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="relative flex items-center gap-1.5 px-2 h-9"
-          aria-label="Notifications"
-        >
+      <PopoverTrigger
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "relative flex items-center gap-1.5 px-2 h-9")}
+        aria-label="Notifications"
+      >
           {/* Bell icon — solid BellDot when unread */}
           {hasNew ? (
             <BellDot className="h-4 w-4 text-primary" />
@@ -110,7 +108,6 @@ export function NotificationBell() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
             </span>
           )}
-        </Button>
       </PopoverTrigger>
 
       <PopoverContent className="w-80 p-0" align="start" sideOffset={8}>

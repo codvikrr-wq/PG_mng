@@ -8,7 +8,8 @@ import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/context/user-context";
 import { useOrg } from "@/context/org-context";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -173,15 +174,13 @@ function UserDropdown({ profile, user, organization, theme, setTheme, initials, 
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className={triggerClass}>
+      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), triggerClass)}>
           <Avatar className={avatarClass}>
             <AvatarImage src={profile?.avatar_url} alt={profile?.first_name} />
             <AvatarFallback className={`text-xs ${rounded === "md" ? "rounded-lg" : ""}`}>
               {initials}
             </AvatarFallback>
           </Avatar>
-        </Button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-64 p-0">
