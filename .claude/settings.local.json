@@ -40,7 +40,13 @@
       "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/notices/page.js')",
       "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/events/page.js')",
       "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/food/plans/page.js')",
-      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/tenants/\\\\[id\\\\]/page.js')"
+      "Bash(cat '/c/Work_R&R/PGManagement/src/app/\\(dashboard\\)/tenants/\\\\[id\\\\]/page.js')",
+      "Bash(pnpm dev:*)",
+      "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
+      "Bash(powershell.exe -Command \"\\(Invoke-WebRequest -Uri ''http://localhost:3000'' -UseBasicParsing -TimeoutSec 5\\).StatusCode\")",
+      "Bash(npx playwright:*)",
+      "Bash(pnpm add:*)",
+      "Bash(powershell.exe -Command \"\\(Invoke-WebRequest -Uri 'http://localhost:3000' -UseBasicParsing -TimeoutSec 5 -MaximumRedirection 0\\).StatusCode\" 2>&1)"
     ],
     "defaultMode": "bypassPermissions"
   },
