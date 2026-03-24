@@ -72,11 +72,10 @@ export default function OnboardingPage() {
   const [inviteEmails, setInviteEmails] = useState("");
 
   async function handleOrgUpdate() {
+    if (!orgName.trim()) { toast.error("Organization name is required"); return; }
     setLoading(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const { data: profile } = await supabase
@@ -86,14 +85,26 @@ export default function OnboardingPage() {
         .single();
 
       if (profile?.organization_id) {
+        // Org already exists — just update it
         await supabase
           .from("organizations")
-          .update({
-            name: orgName || undefined,
-            timezone,
-            currency,
-          })
+          .update({ name: orgName, timezone, currency })
           .eq("id", profile.organization_id);
+      } else {
+        // Org was never created — call complete-signup to fix it
+        const res = await fetch("/api/auth/complete-signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            firstName: profile?.first_name || "",
+            lastName: profile?.last_name || "",
+            orgName,
+            timezone,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Failed to create organization");
       }
 
       setStep(1);
@@ -121,6 +132,8 @@ export default function OnboardingPage() {
         .select("organization_id")
         .eq("id", user.id)
         .single();
+
+      if (!profile?.organization_id) throw new Error("Organization not found. Please go back and complete step 1.");
 
       const { error } = await supabase.from("pgs").insert({
         organization_id: profile.organization_id,

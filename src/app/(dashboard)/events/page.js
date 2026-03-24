@@ -51,27 +51,21 @@ export default function EventsPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
-        .from("events")
-        .select("*, pgs(name)")
-        .eq("organization_id", organization.id)
-        .order("starts_at", { ascending: false });
-      if (currentPg) query = query.eq("pg_id", currentPg.id);
-      const { data } = await query;
+      let eventsQ = supabase.from("events").select("*, pgs(name)").eq("organization_id", organization.id).order("starts_at", { ascending: false });
+      if (currentPg) eventsQ = eventsQ.eq("pg_id", currentPg.id);
+
+      const [{ data }, { data: rsvps }] = await Promise.all([
+        eventsQ,
+        supabase.from("event_rsvps").select("event_id, status").eq("organization_id", organization.id),
+      ]);
       setEvents(data || []);
 
-      if (data?.length) {
-        const { data: rsvps } = await supabase
-          .from("event_rsvps")
-          .select("event_id, status")
-          .in("event_id", data.map((e) => e.id));
-        const counts = {};
-        (rsvps || []).forEach((r) => {
-          if (!counts[r.event_id]) counts[r.event_id] = { yes: 0, no: 0, maybe: 0 };
-          counts[r.event_id][r.status] = (counts[r.event_id][r.status] || 0) + 1;
-        });
-        setRsvpCounts(counts);
-      }
+      const counts = {};
+      (rsvps || []).forEach((r) => {
+        if (!counts[r.event_id]) counts[r.event_id] = { yes: 0, no: 0, maybe: 0 };
+        counts[r.event_id][r.status] = (counts[r.event_id][r.status] || 0) + 1;
+      });
+      setRsvpCounts(counts);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [organization, currentPg]);

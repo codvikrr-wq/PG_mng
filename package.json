@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "predev": "npx --yes kill-port 3000 || true",
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

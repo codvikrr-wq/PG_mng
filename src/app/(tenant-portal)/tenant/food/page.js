@@ -41,7 +41,7 @@ export default function TenantFoodPage() {
     try {
       const { data: tenantData } = await supabase
         .from("tenants")
-        .select("id, pg_id")
+        .select("id, pg_id, organization_id")
         .eq("user_id", user.id)
         .single();
 
@@ -53,8 +53,8 @@ export default function TenantFoodPage() {
         .from("tenant_meal_plans")
         .select("*, meal_plans(*)")
         .eq("tenant_id", tenantData.id)
-        .eq("is_active", true)
-        .single();
+        .eq("status", "active")
+        .maybeSingle();
 
       setMealPlan(planData?.meal_plans || null);
 
@@ -95,24 +95,28 @@ export default function TenantFoodPage() {
     setToggling(key);
     try {
       const existing = mealOrders[key];
+      const newStatus = optIn ? "confirmed" : "cancelled";
       if (existing) {
         const { error } = await supabase
           .from("meal_orders")
-          .update({ opted_in: optIn })
+          .update({ status: newStatus })
           .eq("id", existing.id);
         if (error) throw error;
         setMealOrders((prev) => ({
           ...prev,
-          [key]: { ...existing, opted_in: optIn },
+          [key]: { ...existing, status: newStatus },
         }));
       } else {
         const { data, error } = await supabase
           .from("meal_orders")
           .insert({
             tenant_id: tenant.id,
+            pg_id: tenant.pg_id,
+            organization_id: tenant.organization_id,
             date,
             meal_type: mealType,
-            opted_in: optIn,
+            quantity: 1,
+            status: newStatus,
           })
           .select()
           .single();
@@ -225,7 +229,7 @@ export default function TenantFoodPage() {
                   {MEAL_TYPES.map((type) => {
                     const key = `${date}_${type}`;
                     const order = mealOrders[key];
-                    const isOptedIn = order ? order.opted_in : true;
+                    const isOptedIn = order ? order.status === "confirmed" : true;
                     return (
                       <div
                         key={key}

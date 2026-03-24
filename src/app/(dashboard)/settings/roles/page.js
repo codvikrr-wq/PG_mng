@@ -113,20 +113,11 @@ export default function RolesPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      const { data: rolesData } = await supabase
-        .from("roles")
-        .select("*")
-        .eq("organization_id", organization.id)
-        .order("is_system", { ascending: false })
-        .order("name");
-
+      const [{ data: rolesData }, { data: userRolesData }] = await Promise.all([
+        supabase.from("roles").select("*").eq("organization_id", organization.id).order("is_system", { ascending: false }).order("name"),
+        supabase.from("user_roles").select("role_id").eq("organization_id", organization.id),
+      ]);
       setRoles(rolesData || []);
-
-      // Get user counts per role
-      const { data: userRolesData } = await supabase
-        .from("user_roles")
-        .select("role_id")
-        .in("role_id", (rolesData || []).map((r) => r.id));
 
       const counts = {};
       (userRolesData || []).forEach((ur) => {

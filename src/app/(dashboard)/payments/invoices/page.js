@@ -246,7 +246,7 @@ export default function InvoicesPage() {
           description: item.description,
           amount: parseFloat(item.amount),
         })),
-        subtotal,
+        amount: subtotal,
         tax_amount: taxAmount,
         total_amount: total,
         status: "draft",
@@ -276,7 +276,7 @@ export default function InvoicesPage() {
     try {
       const { data, error } = await supabase
         .from("invoices")
-        .update({ status: "sent", sent_at: new Date().toISOString() })
+        .update({ status: "sent" })
         .eq("id", invoice.id)
         .select("*, tenants(first_name, last_name), pgs(name)")
         .single();
@@ -286,6 +286,14 @@ export default function InvoicesPage() {
       setInvoices((prev) =>
         prev.map((inv) => (inv.id === data.id ? data : inv))
       );
+
+      // Trigger invoice email (best-effort)
+      try {
+        await supabase.functions.invoke("send-invoice-email", {
+          body: { invoiceId: invoice.id, tenantId: invoice.tenant_id },
+        });
+      } catch (_) {}
+
       toast.success("Invoice marked as sent");
     } catch (error) {
       toast.error(error.message);
@@ -750,7 +758,7 @@ export default function InvoicesPage() {
               <div className="border-t pt-3 space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(viewInvoice.subtotal)}</span>
+                  <span>{formatCurrency(viewInvoice.amount)}</span>
                 </div>
                 {viewInvoice.tax_amount > 0 && (
                   <div className="flex justify-between">

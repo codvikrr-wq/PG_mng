@@ -21,6 +21,7 @@ export default function TenantDashboardPage() {
   const [tenant, setTenant] = useState(null);
   const [room, setRoom] = useState(null);
   const [bed, setBed] = useState(null);
+  const [lease, setLease] = useState(null);
   const [pendingInvoices, setPendingInvoices] = useState(0);
   const [activeComplaints, setActiveComplaints] = useState(0);
   const [notices, setNotices] = useState([]);
@@ -32,7 +33,7 @@ export default function TenantDashboardPage() {
       // Get tenant record
       const { data: tenantData } = await supabase
         .from("tenants")
-        .select("*, rooms(name, room_number, room_type), beds(bed_number)")
+        .select("*, rooms(name, room_type), beds(bed_number)")
         .eq("user_id", user.id)
         .single();
 
@@ -40,6 +41,15 @@ export default function TenantDashboardPage() {
       setTenant(tenantData);
       setRoom(tenantData.rooms);
       setBed(tenantData.beds);
+
+      // Active lease
+      const { data: leaseData } = await supabase
+        .from("leases")
+        .select("end_date, rent_amount")
+        .eq("tenant_id", tenantData.id)
+        .eq("status", "active")
+        .maybeSingle();
+      setLease(leaseData);
 
       // Pending invoices
       const { count: invoiceCount } = await supabase
@@ -62,7 +72,7 @@ export default function TenantDashboardPage() {
         .from("notices")
         .select("*")
         .or(`pg_id.eq.${tenantData.pg_id},pg_id.is.null`)
-        .order("is_pinned", { ascending: false })
+        .order("pinned", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(5);
       setNotices(noticeData || []);
@@ -112,7 +122,7 @@ export default function TenantDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">
-              {room?.room_number || "—"}
+              {room?.name || "—"}
             </div>
             <p className="text-xs text-muted-foreground">
               {room?.room_type} {bed ? `/ Bed ${bed.bed_number}` : ""}
@@ -130,9 +140,10 @@ export default function TenantDashboardPage() {
               {tenant?.status || "—"}
             </div>
             <p className="text-xs text-muted-foreground">
-              {tenant?.lease_end
-                ? `Ends ${format(new Date(tenant.lease_end), "MMM d, yyyy")}`
+              {lease?.end_date
+                ? `Ends ${format(new Date(lease.end_date), "MMM d, yyyy")}`
                 : "No lease date"}
+              {lease?.rent_amount ? ` · ₹${Number(lease.rent_amount).toLocaleString("en-IN")}/mo` : ""}
             </p>
           </CardContent>
         </Card>
@@ -202,7 +213,7 @@ export default function TenantDashboardPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        {n.is_pinned && <Pin className="h-3 w-3 text-primary" />}
+                        {n.pinned && <Pin className="h-3 w-3 text-primary" />}
                         <h3 className="font-medium truncate">{n.title}</h3>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground line-clamp-2">

@@ -30,7 +30,7 @@ export default function TenantNoticesPage() {
         .from("notices")
         .select("*, users(first_name, last_name)")
         .or(`pg_id.eq.${tenantData.pg_id},pg_id.is.null`)
-        .order("is_pinned", { ascending: false })
+        .order("pinned", { ascending: false })
         .order("created_at", { ascending: false });
 
       setNotices(data || []);
@@ -73,10 +73,10 @@ export default function TenantNoticesPage() {
       ) : (
         <div className="space-y-3">
           {notices.map((n) => (
-            <Card key={n.id} className={n.is_pinned ? "border-primary/50" : ""}>
+            <Card key={n.id} className={n.pinned ? "border-primary/50" : ""}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-2">
-                  {n.is_pinned && (
+                  {n.pinned && (
                     <Pin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">

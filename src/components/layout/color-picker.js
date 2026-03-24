@@ -91,6 +91,58 @@ function getInitialColor() {
   return localStorage.getItem("pg-primary-color") || "#007BFF";
 }
 
+export function ColorPickerInline() {
+  const [color, setColor] = useState(getInitialColor);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("pg-primary-color");
+    if (saved) applyPrimaryColor(saved);
+  }, []);
+
+  function handleColorChange(hex) {
+    if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
+    setColor(hex);
+    applyPrimaryColor(hex);
+    localStorage.setItem("pg-primary-color", hex);
+  }
+
+  return (
+    <div className="space-y-2 px-2 py-1">
+      <div className="grid grid-cols-6 gap-1.5">
+        {PRESET_COLORS.map((preset) => (
+          <button
+            key={preset}
+            className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
+            style={{
+              backgroundColor: preset,
+              borderColor: color === preset ? "white" : "transparent",
+              boxShadow: color === preset ? `0 0 0 2px ${preset}` : "none",
+            }}
+            onClick={() => handleColorChange(preset)}
+            aria-label={`Select color ${preset}`}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <div
+          className="h-6 w-6 rounded-md border shrink-0"
+          style={{ backgroundColor: color }}
+        />
+        <Input
+          value={color}
+          onChange={(e) => {
+            const val = e.target.value;
+            setColor(val);
+            if (/^#[0-9A-Fa-f]{6}$/.test(val)) handleColorChange(val);
+          }}
+          placeholder="#007BFF"
+          className="h-7 text-xs font-mono"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ColorPicker() {
   const [color, setColor] = useState(getInitialColor);
   const [open, setOpen] = useState(false);

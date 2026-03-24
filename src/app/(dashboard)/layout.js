@@ -2,6 +2,7 @@ import { UserProvider } from "@/context/user-context";
 import { OrgProvider } from "@/context/org-context";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
+import { OrgGate } from "@/components/layout/org-gate";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
 export const metadata = {
@@ -17,7 +18,9 @@ export default function DashboardLayout({ children }) {
           <AppSidebar />
           <SidebarInset>
             <TopBar />
-            <main className="flex-1 p-4 md:p-6">{children}</main>
+            <main className="flex-1 p-4 md:p-6">
+              <OrgGate>{children}</OrgGate>
+            </main>
           </SidebarInset>
         </SidebarProvider>
       </OrgProvider>

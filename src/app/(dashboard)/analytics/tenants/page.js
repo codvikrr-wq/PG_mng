@@ -55,6 +55,7 @@ export default function TenantAnalyticsPage() {
     if (!organization) return;
 
     async function load() {
+      try {
       setLoading(true);
 
       let query = supabase
@@ -120,7 +121,11 @@ export default function TenantAnalyticsPage() {
         .slice(0, 10);
       setRecentCheckOuts(checkOuts);
 
-      setLoading(false);
+      } catch (err) {
+        console.error("Failed to load tenant analytics:", err);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();

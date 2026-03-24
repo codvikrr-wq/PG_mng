@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useOrg } from "@/context/org-context";
-import { useUser } from "@/context/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -23,14 +22,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Package, Plus, Loader2, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Package, Plus, Loader2, Pencil, Trash2, AlertTriangle, Search } from "lucide-react";
 import { format } from "date-fns";
 
 const UNITS = ["pcs", "kg", "liters", "boxes", "rolls", "packets", "sets", "bottles"];
 
 export default function InventoryPage() {
   const { organization, currentPg, pgs } = useOrg();
-  const { user } = useUser();
   const supabase = createClient();
 
   const [items, setItems] = useState([]);
@@ -46,9 +44,8 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState("");
-  const [minQuantity, setMinQuantity] = useState("");
-  const [costPerUnit, setCostPerUnit] = useState("");
-  const [lastRestocked, setLastRestocked] = useState("");
+  const [reorderThreshold, setReorderThreshold] = useState("");
+  const [lastRestockedAt, setLastRestockedAt] = useState("");
 
   const loadData = useCallback(async () => {
     if (!organization) return;
@@ -71,7 +68,17 @@ export default function InventoryPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const lowStockCount = items.filter((i) => i.quantity <= i.min_quantity).length;
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const lowStockCount = items.filter((i) => i.quantity <= i.reorder_threshold).length;
+  const categories = [...new Set(items.map((i) => i.category).filter(Boolean))].sort();
+
+  const filtered = items.filter((item) => {
+    const matchSearch = !search || item.name?.toLowerCase().includes(search.toLowerCase()) || item.category?.toLowerCase().includes(search.toLowerCase());
+    const matchCat = categoryFilter === "all" || item.category === categoryFilter;
+    return matchSearch && matchCat;
+  });
 
   function openCreate() {
     setEditing(null);
@@ -80,9 +87,8 @@ export default function InventoryPage() {
     setCategory("");
     setQuantity("");
     setUnit("");
-    setMinQuantity("");
-    setCostPerUnit("");
-    setLastRestocked(new Date().toISOString().split("T")[0]);
+    setReorderThreshold("");
+    setLastRestockedAt(new Date().toISOString().split("T")[0]);
     setDialogOpen(true);
   }
 
@@ -93,9 +99,8 @@ export default function InventoryPage() {
     setCategory(item.category || "");
     setQuantity(item.quantity?.toString() || "");
     setUnit(item.unit || "");
-    setMinQuantity(item.min_quantity?.toString() || "");
-    setCostPerUnit(item.cost_per_unit?.toString() || "");
-    setLastRestocked(item.last_restocked || "");
+    setReorderThreshold(item.reorder_threshold?.toString() || "");
+    setLastRestockedAt(item.last_restocked_at ? item.last_restocked_at.split("T")[0] : "");
     setDialogOpen(true);
   }
 
@@ -113,9 +118,8 @@ export default function InventoryPage() {
         category: category || null,
         quantity: parseInt(quantity),
         unit,
-        min_quantity: parseInt(minQuantity) || 0,
-        cost_per_unit: parseFloat(costPerUnit) || 0,
-        last_restocked: lastRestocked || null,
+        reorder_threshold: parseInt(reorderThreshold) || 0,
+        last_restocked_at: lastRestockedAt ? new Date(lastRestockedAt).toISOString() : null,
       };
 
       if (editing) {
@@ -194,6 +198,28 @@ export default function InventoryPage() {
         </Card>
       </div>
 
+      {/* Filters */}
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search items…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Categories" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <EmptyState
           icon={Package}
@@ -211,14 +237,15 @@ export default function InventoryPage() {
                 <TableHead>Category</TableHead>
                 <TableHead>Quantity</TableHead>
                 <TableHead>Unit</TableHead>
-                <TableHead>Cost/Unit</TableHead>
                 <TableHead>Last Restocked</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => {
-                const isLow = item.quantity <= item.min_quantity;
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No items match your search</TableCell></TableRow>
+              ) : filtered.map((item) => {
+                const isLow = item.quantity <= item.reorder_threshold;
                 return (
                   <TableRow key={item.id} className={isLow ? "bg-amber-50 dark:bg-amber-950/20" : ""}>
                     <TableCell className="font-medium">
@@ -237,13 +264,12 @@ export default function InventoryPage() {
                       <span className={isLow ? "text-red-600 font-semibold" : ""}>
                         {item.quantity}
                       </span>
-                      {item.min_quantity > 0 && (
-                        <span className="text-muted-foreground text-xs ml-1">/ min {item.min_quantity}</span>
+                      {item.reorder_threshold > 0 && (
+                        <span className="text-muted-foreground text-xs ml-1">/ min {item.reorder_threshold}</span>
                       )}
                     </TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell>{item.cost_per_unit ? `₹${Number(item.cost_per_unit).toLocaleString()}` : "—"}</TableCell>
-                    <TableCell>{item.last_restocked ? format(new Date(item.last_restocked), "MMM d, yyyy") : "—"}</TableCell>
+                    <TableCell>{item.last_restocked_at ? format(new Date(item.last_restocked_at), "MMM d, yyyy") : "—"}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
@@ -302,19 +328,13 @@ export default function InventoryPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Min Quantity</Label>
-                <Input type="number" value={minQuantity} onChange={(e) => setMinQuantity(e.target.value)} placeholder="0" min="0" />
+                <Label>Reorder Threshold</Label>
+                <Input type="number" value={reorderThreshold} onChange={(e) => setReorderThreshold(e.target.value)} placeholder="0" min="0" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Cost per Unit (₹)</Label>
-                <Input type="number" value={costPerUnit} onChange={(e) => setCostPerUnit(e.target.value)} placeholder="0" min="0" step="0.01" />
-              </div>
-              <div className="space-y-2">
-                <Label>Last Restocked</Label>
-                <Input type="date" value={lastRestocked} onChange={(e) => setLastRestocked(e.target.value)} />
-              </div>
+            <div className="space-y-2">
+              <Label>Last Restocked</Label>
+              <Input type="date" value={lastRestockedAt} onChange={(e) => setLastRestockedAt(e.target.value)} />
             </div>
           </div>
           <DialogFooter>

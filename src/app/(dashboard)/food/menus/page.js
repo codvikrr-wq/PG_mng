@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useOrg } from "@/context/org-context";
-import { useUser } from "@/context/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,6 @@ const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", snack: "Snacks", d
 
 export default function MenusPage() {
   const { organization, currentPg } = useOrg();
-  const { user } = useUser();
   const supabase = createClient();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -114,7 +112,6 @@ export default function MenusPage() {
             date: dateStr,
             meal_type: mealType,
             items,
-            created_by: user.id,
           })
           .select()
           .single();

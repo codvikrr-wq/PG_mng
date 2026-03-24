@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useOrg } from "@/context/org-context";
-import { useUser } from "@/context/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -26,11 +25,10 @@ import { format, addDays, subDays } from "date-fns";
 import { MEAL_TYPES } from "@/lib/constants";
 
 const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", snack: "Snacks", dinner: "Dinner" };
-const STATUS_COLORS = { ordered: "default", cancelled: "destructive", delivered: "secondary" };
+const STATUS_COLORS = { confirmed: "default", cancelled: "destructive", delivered: "secondary" };
 
 export default function KitchenPage() {
   const { organization, currentPg } = useOrg();
-  const { user } = useUser();
   const supabase = createClient();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -48,7 +46,7 @@ export default function KitchenPage() {
     try {
       let query = supabase
         .from("meal_orders")
-        .select("*, tenants(full_name, room_number)")
+        .select("*, tenants(first_name, last_name, rooms(name))")
         .eq("organization_id", organization.id)
         .eq("pg_id", currentPg.id)
         .eq("date", dateStr)
@@ -72,7 +70,7 @@ export default function KitchenPage() {
     const mealOrders = orders.filter((o) => o.meal_type === mt);
     acc[mt] = {
       total: mealOrders.length,
-      ordered: mealOrders.filter((o) => o.status === "ordered").length,
+      confirmed: mealOrders.filter((o) => o.status === "confirmed").length,
       delivered: mealOrders.filter((o) => o.status === "delivered").length,
       cancelled: mealOrders.filter((o) => o.status === "cancelled").length,
     };
@@ -80,7 +78,7 @@ export default function KitchenPage() {
   }, {});
 
   const filteredOrders = mealFilter === "all" ? orders : orders.filter((o) => o.meal_type === mealFilter);
-  const pendingOrders = filteredOrders.filter((o) => o.status === "ordered");
+  const pendingOrders = filteredOrders.filter((o) => o.status === "confirmed");
 
   function toggleOrderSelection(orderId) {
     setSelectedOrders((prev) =>
@@ -157,7 +155,7 @@ export default function KitchenPage() {
                   <CardContent className="px-4 pb-4">
                     <div className="text-2xl font-bold">{s.total}</div>
                     <div className="flex gap-2 mt-1 text-xs">
-                      <span className="text-green-600">{s.ordered} pending</span>
+                      <span className="text-green-600">{s.confirmed} pending</span>
                       <span className="text-blue-600">{s.delivered} delivered</span>
                       <span className="text-red-600">{s.cancelled} cancelled</span>
                     </div>
@@ -216,15 +214,15 @@ export default function KitchenPage() {
                   {filteredOrders.map((order) => (
                     <TableRow key={order.id} className={order.status === "cancelled" ? "opacity-50" : ""}>
                       <TableCell>
-                        {order.status === "ordered" && (
+                        {order.status === "confirmed" && (
                           <Checkbox
                             checked={selectedOrders.includes(order.id)}
                             onCheckedChange={() => toggleOrderSelection(order.id)}
                           />
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">{order.tenants?.full_name || "Unknown"}</TableCell>
-                      <TableCell>{order.tenants?.room_number || "-"}</TableCell>
+                      <TableCell className="font-medium">{order.tenants ? `${order.tenants.first_name} ${order.tenants.last_name}` : "Unknown"}</TableCell>
+                      <TableCell>{order.tenants?.rooms?.name || "-"}</TableCell>
                       <TableCell className="capitalize">{MEAL_LABELS[order.meal_type] || order.meal_type}</TableCell>
                       <TableCell>
                         <Badge variant={STATUS_COLORS[order.status] || "outline"} className="capitalize">
@@ -256,7 +254,7 @@ export default function KitchenPage() {
                     .filter((o) => o.status === "cancelled")
                     .map((o) => (
                       <Badge key={o.id} variant="outline">
-                        {o.tenants?.full_name || "Unknown"}
+                        {o.tenants ? `${o.tenants.first_name} ${o.tenants.last_name}` : "Unknown"}
                         <span className="ml-1 text-muted-foreground capitalize">({MEAL_LABELS[o.meal_type]})</span>
                       </Badge>
                     ))}

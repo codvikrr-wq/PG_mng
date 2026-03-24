@@ -44,8 +44,8 @@ export default function TenantEventsPage() {
         .from("events")
         .select("*")
         .eq("pg_id", tenantData.pg_id)
-        .gte("event_date", new Date().toISOString().split("T")[0])
-        .order("event_date", { ascending: true });
+        .gte("starts_at", new Date().toISOString())
+        .order("starts_at", { ascending: true });
 
       setEvents(eventData || []);
 
@@ -141,8 +141,8 @@ export default function TenantEventsPage() {
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
-                      {format(new Date(e.event_date), "MMM d, yyyy")}
-                      {e.start_time && ` at ${e.start_time}`}
+                      {format(new Date(e.starts_at), "MMM d, yyyy")}
+                      {` at ${format(new Date(e.starts_at), "h:mm a")}`}
                     </span>
                     {e.location && (
                       <span className="flex items-center gap-1">

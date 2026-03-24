@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
-export async function middleware(request) {
+export async function proxy(request) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -25,6 +25,7 @@ export async function middleware(request) {
     }
   );
 
+  // Use getUser() — validates token server-side (more secure than getSession)
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -39,7 +40,19 @@ export async function middleware(request) {
     "/reset-password",
     "/auth/callback",
     "/tenant-login",
+    "/invite",
+    "/privacy",
+    "/terms",
   ];
+
+  // API routes that must be publicly accessible
+  if (
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/invite/")
+  ) {
+    return supabaseResponse;
+  }
 
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)

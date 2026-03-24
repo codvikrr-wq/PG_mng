@@ -50,26 +50,20 @@ export default function MealPlansPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
-        .from("meal_plans")
-        .select("*, pgs(name)")
-        .eq("organization_id", organization.id)
-        .order("created_at", { ascending: false });
-      if (currentPg) query = query.eq("pg_id", currentPg.id);
-      const { data } = await query;
+      let plansQ = supabase.from("meal_plans").select("*, pgs(name)").eq("organization_id", organization.id).order("created_at", { ascending: false });
+      if (currentPg) plansQ = plansQ.eq("pg_id", currentPg.id);
+
+      const [{ data }, { data: tenantPlans }] = await Promise.all([
+        plansQ,
+        supabase.from("tenant_meal_plans").select("meal_plan_id").eq("organization_id", organization.id),
+      ]);
       setPlans(data || []);
 
-      if (data?.length) {
-        const { data: tenantPlans } = await supabase
-          .from("tenant_meal_plans")
-          .select("meal_plan_id")
-          .in("meal_plan_id", data.map((p) => p.id));
-        const counts = {};
-        (tenantPlans || []).forEach((tp) => {
-          counts[tp.meal_plan_id] = (counts[tp.meal_plan_id] || 0) + 1;
-        });
-        setTenantCounts(counts);
-      }
+      const counts = {};
+      (tenantPlans || []).forEach((tp) => {
+        counts[tp.meal_plan_id] = (counts[tp.meal_plan_id] || 0) + 1;
+      });
+      setTenantCounts(counts);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [organization, currentPg]);
@@ -81,7 +75,7 @@ export default function MealPlansPage() {
   }
 
   function openEdit(plan) {
-    setEditing(plan); setName(plan.name); setDescription(plan.description || ""); setPrice(plan.price?.toString() || ""); setPgId(plan.pg_id || ""); setMealsIncluded(plan.meals_included || []); setIsActive(plan.is_active); setDialogOpen(true);
+    setEditing(plan); setName(plan.name); setDescription(plan.description || ""); setPrice(plan.price?.toString() || ""); setPgId(plan.pg_id || ""); setMealsIncluded(plan.meals_included || []); setIsActive(plan.status === "active"); setDialogOpen(true);
   }
 
   function toggleMeal(meal) {
@@ -92,15 +86,16 @@ export default function MealPlansPage() {
 
   async function handleToggleActive(plan) {
     try {
+      const newStatus = plan.status === "active" ? "inactive" : "active";
       const { data, error } = await supabase
         .from("meal_plans")
-        .update({ is_active: !plan.is_active })
+        .update({ status: newStatus })
         .eq("id", plan.id)
         .select("*, pgs(name)")
         .single();
       if (error) throw error;
       setPlans((prev) => prev.map((p) => (p.id === data.id ? data : p)));
-      toast.success(data.is_active ? "Plan activated" : "Plan deactivated");
+      toast.success(data.status === "active" ? "Plan activated" : "Plan deactivated");
     } catch (error) { toast.error(error.message); }
   }
 
@@ -118,7 +113,7 @@ export default function MealPlansPage() {
         description,
         price: parseFloat(price),
         meals_included: mealsIncluded,
-        is_active: isActive,
+        status: isActive ? "active" : "inactive",
       };
       if (editing) {
         const { data, error } = await supabase.from("meal_plans").update(payload).eq("id", editing.id).select("*, pgs(name)").single();
@@ -162,12 +157,12 @@ export default function MealPlansPage() {
           {plans.map((plan) => {
             const count = tenantCounts[plan.id] || 0;
             return (
-              <Card key={plan.id} className={!plan.is_active ? "opacity-60" : ""}>
+              <Card key={plan.id} className={plan.status !== "active" ? "opacity-60" : ""}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">{plan.name}</CardTitle>
                     <div className="flex items-center gap-1">
-                      <Switch checked={plan.is_active} onCheckedChange={() => handleToggleActive(plan)} />
+                      <Switch checked={plan.status === "active"} onCheckedChange={() => handleToggleActive(plan)} />
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(plan)}><Pencil className="h-3 w-3" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeletePlan(plan)}><Trash2 className="h-3 w-3" /></Button>
                     </div>
@@ -191,7 +186,7 @@ export default function MealPlansPage() {
                       {count} tenant{count !== 1 ? "s" : ""}
                     </div>
                     <Badge variant="outline">{plan.pgs?.name || "All PGs"}</Badge>
-                    {!plan.is_active && <Badge variant="destructive">Inactive</Badge>}
+                    {plan.status !== "active" && <Badge variant="destructive">Inactive</Badge>}
                   </div>
                 </CardContent>
               </Card>

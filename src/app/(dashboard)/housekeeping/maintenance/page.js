@@ -77,29 +77,20 @@ export default function MaintenanceTicketsPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
+      let ticketsQ = supabase
         .from("maintenance_tickets")
-        .select("*, rooms(room_number), reporter:reported_by(full_name), assignee:assigned_to(full_name), pgs(name)")
+        .select("*, rooms(name), reporter:reported_by(first_name, last_name), assignee:assigned_to(first_name, last_name), pgs(name)")
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
+      if (currentPg) ticketsQ = ticketsQ.eq("pg_id", currentPg.id);
 
-      if (currentPg) query = query.eq("pg_id", currentPg.id);
-      const { data } = await query;
+      const [{ data }, { data: roomData }, { data: staffData }] = await Promise.all([
+        ticketsQ,
+        supabase.from("rooms").select("id, name, pg_id").eq("organization_id", organization.id).order("name"),
+        supabase.from("users").select("id, first_name, last_name").eq("organization_id", organization.id).order("first_name"),
+      ]);
       setTickets(data || []);
-
-      const { data: roomData } = await supabase
-        .from("rooms")
-        .select("id, room_number, pg_id")
-        .eq("organization_id", organization.id)
-        .order("room_number");
       setRooms(roomData || []);
-
-      const { data: staffData } = await supabase
-        .from("users")
-        .select("id, full_name")
-        .eq("organization_id", organization.id)
-        .neq("system_role", "Tenant")
-        .order("full_name");
       setStaffUsers(staffData || []);
     } catch (err) {
       console.error(err);
@@ -148,7 +139,7 @@ export default function MaintenanceTicketsPage() {
       const { data, error } = await supabase
         .from("maintenance_tickets")
         .insert(payload)
-        .select("*, rooms(room_number), reporter:reported_by(full_name), assignee:assigned_to(full_name), pgs(name)")
+        .select("*, rooms(name), reporter:reported_by(first_name, last_name), assignee:assigned_to(first_name, last_name), pgs(name)")
         .single();
       if (error) throw error;
       setTickets((prev) => [data, ...prev]);
@@ -172,7 +163,7 @@ export default function MaintenanceTicketsPage() {
         .from("maintenance_tickets")
         .update(updates)
         .eq("id", selectedTicket.id)
-        .select("*, rooms(room_number), reporter:reported_by(full_name), assignee:assigned_to(full_name), pgs(name)")
+        .select("*, rooms(name), reporter:reported_by(first_name, last_name), assignee:assigned_to(first_name, last_name), pgs(name)")
         .single();
       if (error) throw error;
       setTickets((prev) => prev.map((t) => (t.id === data.id ? data : t)));
@@ -193,7 +184,7 @@ export default function MaintenanceTicketsPage() {
         .from("maintenance_tickets")
         .update({ assigned_to: userId || null })
         .eq("id", selectedTicket.id)
-        .select("*, rooms(room_number), reporter:reported_by(full_name), assignee:assigned_to(full_name), pgs(name)")
+        .select("*, rooms(name), reporter:reported_by(first_name, last_name), assignee:assigned_to(first_name, last_name), pgs(name)")
         .single();
       if (error) throw error;
       setTickets((prev) => prev.map((t) => (t.id === data.id ? data : t)));
@@ -278,7 +269,7 @@ export default function MaintenanceTicketsPage() {
                 <TableRow key={t.id} className="cursor-pointer" onClick={() => openSheet(t)}>
                   <TableCell className="font-medium">{t.title}</TableCell>
                   <TableCell>{t.pgs?.name || "—"}</TableCell>
-                  <TableCell>{t.rooms?.room_number || "—"}</TableCell>
+                  <TableCell>{t.rooms?.name || "—"}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`capitalize ${PRIORITY_COLORS[t.priority] || ""}`}>
                       {t.priority}
@@ -289,7 +280,7 @@ export default function MaintenanceTicketsPage() {
                       {statusLabel(t.status)}
                     </Badge>
                   </TableCell>
-                  <TableCell>{t.assignee?.full_name || "—"}</TableCell>
+                  <TableCell>{t.assignee ? `${t.assignee.first_name || ""} ${t.assignee.last_name || ""}`.trim() : "—"}</TableCell>
                   <TableCell>{format(new Date(t.created_at), "MMM d, yyyy")}</TableCell>
                   <TableCell>
                     <Button
@@ -316,7 +307,7 @@ export default function MaintenanceTicketsPage() {
               <SheetHeader>
                 <SheetTitle>{selectedTicket.title}</SheetTitle>
                 <SheetDescription>
-                  Reported by {selectedTicket.reporter?.full_name || "Unknown"} on{" "}
+                  Reported by {selectedTicket.reporter ? `${selectedTicket.reporter.first_name || ""} ${selectedTicket.reporter.last_name || ""}`.trim() : "Unknown"} on{" "}
                   {format(new Date(selectedTicket.created_at), "MMM d, yyyy h:mm a")}
                 </SheetDescription>
               </SheetHeader>
@@ -333,7 +324,7 @@ export default function MaintenanceTicketsPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-muted-foreground text-xs">Room</Label>
-                    <p className="text-sm">{selectedTicket.rooms?.room_number || "—"}</p>
+                    <p className="text-sm">{selectedTicket.rooms?.name || "—"}</p>
                   </div>
                 </div>
 
@@ -374,7 +365,7 @@ export default function MaintenanceTicketsPage() {
                     <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">Unassigned</SelectItem>
-                      {staffUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
+                      {staffUsers.map((u) => <SelectItem key={u.id} value={u.id}>{`${u.first_name || ""} ${u.last_name || ""}`.trim()}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -443,7 +434,7 @@ export default function MaintenanceTicketsPage() {
                   <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Common Area</SelectItem>
-                    {filteredRooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.room_number}</SelectItem>)}
+                    {filteredRooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

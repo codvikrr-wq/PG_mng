@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useOrg } from "@/context/org-context";
+import { useUser } from "@/context/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,16 @@ import {
   Phone,
   Mail,
   User,
+  Ban,
+  RefreshCw,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TENANT_STATUS, INVOICE_STATUS, COMPLAINT_STATUS } from "@/lib/constants";
 
 const STATUS_COLORS = {
@@ -99,6 +109,7 @@ export default function TenantDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { organization, pgs } = useOrg();
+  const { user } = useUser();
   const supabase = createClient();
 
   const [tenant, setTenant] = useState(null);
@@ -113,7 +124,8 @@ export default function TenantDetailPage() {
   const [bedNumber, setBedNumber] = useState("");
 
   // Edit form state
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
@@ -154,6 +166,16 @@ export default function TenantDetailPage() {
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
 
+  // Blacklist dialog
+  const [blacklistOpen, setBlacklistOpen] = useState(false);
+  const [blacklisting, setBlacklisting] = useState(false);
+
+  // Deposit refund dialog
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundNotes, setRefundNotes] = useState("");
+  const [refunding, setRefunding] = useState(false);
+
   // Load tenant
   const loadTenant = useCallback(async () => {
     try {
@@ -167,7 +189,8 @@ export default function TenantDetailPage() {
       if (!data) return;
 
       setTenant(data);
-      setFullName(data.full_name || "");
+      setFirstName(data.first_name || "");
+      setLastName(data.last_name || "");
       setEmail(data.email || "");
       setPhone(data.phone || "");
       setDob(data.date_of_birth || "");
@@ -186,24 +209,15 @@ export default function TenantDetailPage() {
         setPgName(pg?.name || "");
       }
 
-      // Load room and bed names
-      if (data.room_id) {
-        const { data: room } = await supabase
-          .from("rooms")
-          .select("name")
-          .eq("id", data.room_id)
-          .single();
-        setRoomName(room?.name || "");
-      }
-
-      if (data.bed_id) {
-        const { data: bed } = await supabase
-          .from("beds")
-          .select("bed_number")
-          .eq("id", data.bed_id)
-          .single();
-        setBedNumber(bed?.bed_number || "");
-      }
+      // Load room, bed, and lease in parallel
+      const [roomResult, bedResult, leaseResult] = await Promise.all([
+        data.room_id ? supabase.from("rooms").select("name").eq("id", data.room_id).single() : Promise.resolve({ data: null }),
+        data.bed_id ? supabase.from("beds").select("bed_number").eq("id", data.bed_id).single() : Promise.resolve({ data: null }),
+        supabase.from("leases").select("*").eq("tenant_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      setRoomName(roomResult.data?.name || "");
+      setBedNumber(bedResult.data?.bed_number || "");
+      if (leaseResult.data) setLease(leaseResult.data);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load tenant");
@@ -300,7 +314,7 @@ export default function TenantDetailPage() {
     setAbsencesLoading(true);
     try {
       const { data, error } = await supabase
-        .from("absences")
+        .from("absence_reports")
         .select("*")
         .eq("tenant_id", id)
         .order("created_at", { ascending: false });
@@ -318,7 +332,8 @@ export default function TenantDetailPage() {
     setSaving(true);
     try {
       const updates = {
-        full_name: fullName,
+        first_name: firstName,
+        last_name: lastName,
         email: email || null,
         phone: phone || null,
         date_of_birth: dob || null,
@@ -351,10 +366,16 @@ export default function TenantDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File must be under 10 MB");
+      return;
+    }
+
     setUploading(true);
     try {
       const fileExt = file.name.split(".").pop();
-      const fileName = `${id}/${Date.now()}.${fileExt}`;
+      // Path must start with org_id to satisfy storage RLS policy
+      const fileName = `${organization.id}/${id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("id-documents")
@@ -362,13 +383,8 @@ export default function TenantDetailPage() {
 
       if (uploadError) throw uploadError;
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("id-documents").getPublicUrl(fileName);
-
       const newDoc = {
         name: file.name,
-        url: publicUrl,
         path: fileName,
         type: file.type,
         uploaded_at: new Date().toISOString(),
@@ -389,8 +405,31 @@ export default function TenantDetailPage() {
       toast.error(error.message);
     } finally {
       setUploading(false);
-      // Reset the file input
       e.target.value = "";
+    }
+  }
+
+  async function openDocument(doc, download = false) {
+    try {
+      if (!doc.path) {
+        // Legacy doc with direct URL
+        window.open(doc.url, "_blank");
+        return;
+      }
+      const { data, error } = await supabase.storage
+        .from("id-documents")
+        .createSignedUrl(doc.path, 3600);
+      if (error) throw error;
+      if (download) {
+        const a = document.createElement("a");
+        a.href = data.signedUrl;
+        a.download = doc.name;
+        a.click();
+      } else {
+        window.open(data.signedUrl, "_blank");
+      }
+    } catch (err) {
+      toast.error("Could not open document");
     }
   }
 
@@ -436,7 +475,7 @@ export default function TenantDetailPage() {
           bed_id: tenant.bed_id,
           start_date: leaseStart,
           end_date: leaseEnd || null,
-          monthly_rent: parseFloat(leaseRent) || 0,
+          rent_amount: parseFloat(leaseRent) || 0,
           deposit_amount: parseFloat(leaseDeposit) || 0,
           status: "active",
         })
@@ -533,6 +572,55 @@ export default function TenantDetailPage() {
     }
   }
 
+  async function handleBlacklist() {
+    setBlacklisting(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({ status: "blacklisted" })
+        .eq("id", id);
+      if (error) throw error;
+      setTenant((prev) => ({ ...prev, status: "blacklisted" }));
+      setBlacklistOpen(false);
+      toast.success("Tenant has been blacklisted");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setBlacklisting(false);
+    }
+  }
+
+  async function handleRefund() {
+    if (!refundAmount || parseFloat(refundAmount) <= 0) {
+      toast.error("Please enter a valid refund amount");
+      return;
+    }
+    setRefunding(true);
+    try {
+      // Record refund as a negative payment
+      const { error } = await supabase.from("payments").insert({
+        organization_id: organization.id,
+        pg_id: tenant.pg_id,
+        tenant_id: id,
+        amount: -Math.abs(parseFloat(refundAmount)),
+        payment_date: new Date().toISOString().split("T")[0],
+        method: "bank_transfer",
+        notes: `Security deposit refund${refundNotes ? ": " + refundNotes : ""}`,
+        recorded_by: user.id,
+        status: "completed",
+      });
+      if (error) throw error;
+      setRefundOpen(false);
+      setRefundAmount("");
+      setRefundNotes("");
+      toast.success("Deposit refund recorded");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setRefunding(false);
+    }
+  }
+
   function getInitials(name) {
     if (!name) return "?";
     const parts = name.trim().split(/\s+/);
@@ -580,15 +668,15 @@ export default function TenantDetailPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
-            <AvatarImage src={tenant.photo_url} alt={tenant.full_name} />
+            <AvatarImage src={tenant.profile_photo_url} alt={`${tenant.first_name} ${tenant.last_name}`} />
             <AvatarFallback className="text-lg">
-              {getInitials(tenant.full_name)}
+              {getInitials(`${tenant.first_name} ${tenant.last_name}`)}
             </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight">
-                {tenant.full_name}
+                {tenant.first_name} {tenant.last_name}
               </h1>
               <Badge
                 variant="secondary"
@@ -629,6 +717,30 @@ export default function TenantDetailPage() {
               Check Out
             </Button>
           )}
+          {tenant.status === "vacated" && lease?.deposit_amount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setRefundAmount(lease.deposit_amount?.toString() || "");
+                setRefundOpen(true);
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refund Deposit
+            </Button>
+          )}
+          {tenant.status !== "blacklisted" && tenant.status !== "vacated" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setBlacklistOpen(true)}
+            >
+              <Ban className="mr-2 h-4 w-4" />
+              Blacklist
+            </Button>
+          )}
         </div>
       </div>
 
@@ -654,10 +766,17 @@ export default function TenantDetailPage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Full Name</Label>
+                      <Label>First Name</Label>
                       <Input
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Last Name</Label>
+                      <Input
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
@@ -714,7 +833,7 @@ export default function TenantDetailPage() {
                         Full Name
                       </p>
                       <p className="text-sm font-medium">
-                        {tenant.full_name || "-"}
+                        {[tenant.first_name, tenant.last_name].filter(Boolean).join(" ") || "-"}
                       </p>
                     </div>
                   </div>
@@ -868,7 +987,12 @@ export default function TenantDetailPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>ID Documents</CardTitle>
+                <div>
+                  <CardTitle>ID Documents</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    PDF, JPG, PNG · max 10 MB per file
+                  </p>
+                </div>
                 <div>
                   <input
                     type="file"
@@ -916,20 +1040,12 @@ export default function TenantDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </a>
-                        <a href={doc.url} download={doc.name}>
-                          <Button variant="ghost" size="icon">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </a>
+                        <Button variant="ghost" size="icon" onClick={() => openDocument(doc, false)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => openDocument(doc, true)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1039,7 +1155,7 @@ export default function TenantDetailPage() {
                       Monthly Rent
                     </p>
                     <p className="text-sm font-medium">
-                      {formatCurrency(lease.monthly_rent)}
+                      {formatCurrency(lease.rent_amount)}
                     </p>
                   </div>
                   <div>
@@ -1102,8 +1218,8 @@ export default function TenantDetailPage() {
                             {invoice.invoice_number || invoice.id.slice(0, 8)}
                           </TableCell>
                           <TableCell className="text-sm">
-                            {invoice.billing_period_start
-                              ? `${formatDate(invoice.billing_period_start)} - ${formatDate(invoice.billing_period_end)}`
+                            {invoice.period_start
+                              ? `${formatDate(invoice.period_start)} - ${formatDate(invoice.period_end)}`
                               : "-"}
                           </TableCell>
                           <TableCell className="text-sm">
@@ -1261,7 +1377,7 @@ export default function TenantDetailPage() {
         open={checkInOpen}
         onOpenChange={setCheckInOpen}
         title="Check In Tenant"
-        description={`This will set ${tenant.full_name}'s status to Active, record today as the move-in date, and mark their bed as occupied.`}
+        description={`This will set ${tenant.first_name} ${tenant.last_name}'s status to Active, record today as the move-in date, and mark their bed as occupied.`}
         confirmLabel="Check In"
         onConfirm={handleCheckIn}
         loading={checkingIn}
@@ -1272,11 +1388,62 @@ export default function TenantDetailPage() {
         open={checkOutOpen}
         onOpenChange={setCheckOutOpen}
         title="Check Out Tenant"
-        description={`This will set ${tenant.full_name}'s status to Vacated, record today as the move-out date, and mark their bed as available.`}
+        description={`This will set ${tenant.first_name} ${tenant.last_name}'s status to Vacated, record today as the move-out date, and mark their bed as available.`}
         confirmLabel="Check Out"
         onConfirm={handleCheckOut}
         loading={checkingOut}
       />
+
+      {/* Blacklist confirmation dialog */}
+      <ConfirmDialog
+        open={blacklistOpen}
+        onOpenChange={setBlacklistOpen}
+        title="Blacklist Tenant"
+        description={`Are you sure you want to blacklist ${tenant.first_name} ${tenant.last_name}? This will flag their account and prevent future check-ins.`}
+        confirmLabel="Blacklist"
+        onConfirm={handleBlacklist}
+        loading={blacklisting}
+      />
+
+      {/* Deposit Refund Dialog */}
+      <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Refund Security Deposit</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Security deposit on record: <strong>{formatCurrency(lease?.deposit_amount)}</strong>
+            </p>
+            <div className="space-y-2">
+              <Label>Refund Amount (₹) <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={refundNotes}
+                onChange={(e) => setRefundNotes(e.target.value)}
+                placeholder="Reason for deductions, if any…"
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefundOpen(false)}>Cancel</Button>
+            <Button onClick={handleRefund} disabled={refunding}>
+              {refunding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Record Refund
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

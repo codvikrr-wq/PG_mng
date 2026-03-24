@@ -6,6 +6,17 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
+// Recursively extract plain text from any React children.
+// Base UI Select.Item needs a `label` string to display in the trigger after selection.
+// Without it, Base UI falls back to rendering the raw `value` (the UUID/ID).
+function extractText(children) {
+  if (children == null) return "";
+  if (typeof children === "string" || typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(extractText).join("");
+  if (React.isValidElement(children)) return extractText(children.props.children);
+  return "";
+}
+
 const Select = SelectPrimitive.Root
 
 function SelectGroup({
@@ -107,11 +118,17 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  label,
   ...props
 }) {
+  // Derive label from children when not explicitly provided so Base UI
+  // can display the human-readable name in the trigger after selection.
+  const resolvedLabel = label !== undefined ? label : extractText(children);
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      label={resolvedLabel}
       className={cn(
         "relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className

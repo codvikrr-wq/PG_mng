@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "./user-context";
 
@@ -13,32 +13,38 @@ export function OrgProvider({ children }) {
   const [currentPg, setCurrentPg] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabaseRef = useRef(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+  const supabase = supabaseRef.current;
 
   useEffect(() => {
     async function loadOrgData() {
-      if (userLoading || !profile?.organization_id) {
+      // Don't touch loading state while user session is still being fetched.
+      // Calling setLoading(false) here would cause pages to mount with a null
+      // organization and get permanently stuck in their own loading state.
+      if (userLoading) return;
+
+      if (!profile?.organization_id) {
         setLoading(false);
         return;
       }
 
       try {
-        // Load organization
-        const { data: orgData } = await supabase
-          .from("organizations")
-          .select("*")
-          .eq("id", profile.organization_id)
-          .single();
+        // Load organization and PGs in parallel
+        const [{ data: orgData }, { data: pgData }] = await Promise.all([
+          supabase
+            .from("organizations")
+            .select("*")
+            .eq("id", profile.organization_id)
+            .single(),
+          supabase
+            .from("pgs")
+            .select("*")
+            .eq("organization_id", profile.organization_id)
+            .order("name"),
+        ]);
 
         setOrganization(orgData);
-
-        // Load PGs for this org
-        const { data: pgData } = await supabase
-          .from("pgs")
-          .select("*")
-          .eq("organization_id", profile.organization_id)
-          .order("name");
-
         setPgs(pgData || []);
 
         // Set current PG from localStorage or first PG

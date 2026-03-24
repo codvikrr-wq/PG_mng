@@ -35,7 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Receipt, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Receipt, Plus, Loader2, Pencil, Trash2, Search, Download } from "lucide-react";
 import { format } from "date-fns";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 
@@ -155,7 +155,42 @@ export default function ExpensesPage() {
     }
   }
 
-  const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const filtered = expenses.filter((e) => {
+    const matchSearch = !search ||
+      e.description?.toLowerCase().includes(search.toLowerCase()) ||
+      e.vendor_name?.toLowerCase().includes(search.toLowerCase()) ||
+      e.category?.toLowerCase().includes(search.toLowerCase());
+    const matchFrom = !dateFrom || e.date >= dateFrom;
+    const matchTo = !dateTo || e.date <= dateTo;
+    return matchSearch && matchFrom && matchTo;
+  });
+
+  const total = filtered.reduce((sum, e) => sum + Number(e.amount), 0);
+
+  function exportCSV() {
+    const rows = [
+      ["Date", "PG", "Category", "Description", "Vendor", "Amount"],
+      ...filtered.map((e) => [
+        e.date,
+        e.pgs?.name || "",
+        e.category || "",
+        e.description || "",
+        e.vendor_name || "",
+        e.amount,
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `expenses-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (loading) return <div className="space-y-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-96" /></div>;
 
@@ -163,14 +198,30 @@ export default function ExpensesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Expenses"
-        description={`${expenses.length} expense${expenses.length !== 1 ? "s" : ""} — Total: ₹${total.toLocaleString()}`}
+        description={`${filtered.length} of ${expenses.length} expense${expenses.length !== 1 ? "s" : ""} — Total: ₹${total.toLocaleString("en-IN")}`}
         action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Add Expense</Button>}
       />
 
       {expenses.length === 0 ? (
         <EmptyState icon={Receipt} title="No expenses recorded" description="Track your property expenses here" action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Add Expense</Button>} />
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <>
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search description, vendor, category…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-36" />
+              <span className="text-muted-foreground text-sm">to</span>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-36" />
+            </div>
+            <Button variant="outline" size="sm" onClick={exportCSV} disabled={filtered.length === 0}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
+          <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -184,7 +235,9 @@ export default function ExpensesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expenses.map((e) => (
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No expenses match your filters</TableCell></TableRow>
+              ) : filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell>{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
                   <TableCell>{e.pgs?.name || "—"}</TableCell>
@@ -202,7 +255,8 @@ export default function ExpensesPage() {
               ))}
             </TableBody>
           </Table>
-        </div>
+          </div>
+        </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -44,8 +44,9 @@ export default function TenantProfilePage() {
       if (!tenantData) return;
       setTenant(tenantData);
       setPhone(tenantData.phone || "");
-      setEmergencyName(tenantData.emergency_contact_name || "");
-      setEmergencyPhone(tenantData.emergency_contact_phone || "");
+      const ec = tenantData.emergency_contact || {};
+      setEmergencyName(ec.name || "");
+      setEmergencyPhone(ec.phone || "");
     } catch (err) {
       console.error(err);
     } finally {
@@ -64,8 +65,7 @@ export default function TenantProfilePage() {
         .from("tenants")
         .update({
           phone,
-          emergency_contact_name: emergencyName,
-          emergency_contact_phone: emergencyPhone,
+          emergency_contact: { name: emergencyName, phone: emergencyPhone },
         })
         .eq("id", tenant.id);
 
@@ -73,8 +73,7 @@ export default function TenantProfilePage() {
       setTenant((prev) => ({
         ...prev,
         phone,
-        emergency_contact_name: emergencyName,
-        emergency_contact_phone: emergencyPhone,
+        emergency_contact: { name: emergencyName, phone: emergencyPhone },
       }));
       toast.success("Profile updated");
     } catch (error) {
@@ -90,12 +89,18 @@ export default function TenantProfilePage() {
 
     setUploadingAvatar(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `${user.id}.${ext}`;
+      const ext = file.name.split(".").pop().toLowerCase();
+      // Store in user's own folder so UPDATE policy (auth.uid() = foldername[1]) passes
+      const path = `${user.id}/photo.${ext}`;
+
+      // Blast-remove old variants before uploading so we always INSERT
+      await supabase.storage.from("avatars").remove(
+        ["png", "jpg", "jpeg", "webp"].map((e) => `${user.id}/photo.${e}`)
+      );
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: false });
 
       if (uploadError) throw uploadError;
 
@@ -103,16 +108,16 @@ export default function TenantProfilePage() {
         .from("avatars")
         .getPublicUrl(path);
 
-      const avatarUrl = urlData.publicUrl;
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
       const { error: updateError } = await supabase
         .from("tenants")
-        .update({ avatar_url: avatarUrl })
+        .update({ profile_photo_url: avatarUrl })
         .eq("id", tenant.id);
 
       if (updateError) throw updateError;
 
-      setTenant((prev) => ({ ...prev, avatar_url: avatarUrl }));
+      setTenant((prev) => ({ ...prev, profile_photo_url: avatarUrl }));
       toast.success("Avatar updated");
     } catch (error) {
       toast.error(error.message);
@@ -171,7 +176,7 @@ export default function TenantProfilePage() {
           <div className="flex items-center gap-4">
             <div className="relative">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={tenant?.avatar_url} />
+                <AvatarImage src={tenant?.profile_photo_url} />
                 <AvatarFallback className="text-lg">
                   {initials || <User className="h-6 w-6" />}
                 </AvatarFallback>

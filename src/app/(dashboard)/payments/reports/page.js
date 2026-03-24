@@ -65,6 +65,7 @@ export default function FinanceReportsPage() {
     if (!organization) return;
 
     async function load() {
+      try {
       setLoading(true);
       const now = new Date();
       let start, end;
@@ -86,47 +87,19 @@ export default function FinanceReportsPage() {
       const startStr = format(start, "yyyy-MM-dd");
       const endStr = format(end, "yyyy-MM-dd");
 
-      // Revenue from payments
-      const { data: payments } = await supabase
-        .from("payments")
-        .select("amount")
-        .eq("organization_id", organization.id)
-        .eq("status", "completed")
-        .gte("created_at", startStr)
-        .lte("created_at", endStr);
+      // Fire all 4 queries in parallel
+      const [{ data: payments }, { data: expData }, { data: invData }, { data: overdueInv }] = await Promise.all([
+        supabase.from("payments").select("amount").eq("organization_id", organization.id).eq("status", "completed").gte("created_at", startStr).lte("created_at", endStr),
+        supabase.from("expenses").select("amount").eq("organization_id", organization.id).gte("date", startStr).lte("date", endStr),
+        supabase.from("invoices").select("total_amount, status").eq("organization_id", organization.id).gte("created_at", startStr).lte("created_at", endStr),
+        supabase.from("invoices").select("*, tenants(first_name, last_name)").eq("organization_id", organization.id).in("status", ["sent", "partial", "overdue"]).order("due_date"),
+      ]);
 
       const revenue = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
-
-      // Expenses
-      const { data: expData } = await supabase
-        .from("expenses")
-        .select("amount")
-        .eq("organization_id", organization.id)
-        .gte("date", startStr)
-        .lte("date", endStr);
-
       const expenseTotal = (expData || []).reduce((s, e) => s + Number(e.amount), 0);
-
-      // Invoices for collection rate
-      const { data: invData } = await supabase
-        .from("invoices")
-        .select("total_amount, status")
-        .eq("organization_id", organization.id)
-        .gte("created_at", startStr)
-        .lte("created_at", endStr);
-
       const expected = (invData || []).reduce((s, i) => s + Number(i.total_amount), 0);
       const collected = (invData || []).filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.total_amount), 0);
-
       setStats({ revenue, expenses: expenseTotal, collected, expected });
-
-      // AR aging
-      const { data: overdueInv } = await supabase
-        .from("invoices")
-        .select("*, tenants(first_name, last_name)")
-        .eq("organization_id", organization.id)
-        .in("status", ["sent", "partial", "overdue"])
-        .order("due_date");
 
       const agingBuckets = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
       const overdueItems = [];
@@ -147,7 +120,11 @@ export default function FinanceReportsPage() {
         Object.entries(agingBuckets).map(([name, value]) => ({ name, value }))
       );
       setOverdueList(overdueItems.sort((a, b) => b.days_overdue - a.days_overdue).slice(0, 5));
-      setLoading(false);
+      } catch (err) {
+        console.error("Failed to load finance reports:", err);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();

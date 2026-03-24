@@ -158,7 +158,9 @@ export default function TenantInvoicesPage() {
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {inv.period || "—"}
+                      {inv.period_start
+                        ? `${format(new Date(inv.period_start), "MMM d")} – ${format(new Date(inv.period_end || inv.period_start), "MMM d, yyyy")}`
+                        : inv.notes || "—"}
                     </p>
                   </div>
                   <div className="text-right">
@@ -188,7 +190,9 @@ export default function TenantInvoicesPage() {
               <SheetHeader>
                 <SheetTitle>Invoice {selected.invoice_number}</SheetTitle>
                 <SheetDescription>
-                  {selected.period || "Invoice details"}
+                  {selected.period_start
+                    ? `${format(new Date(selected.period_start), "MMM d")} – ${format(new Date(selected.period_end || selected.period_start), "MMM d, yyyy")}`
+                    : "Invoice details"}
                 </SheetDescription>
               </SheetHeader>
               <div className="mt-6 space-y-6">
@@ -258,7 +262,7 @@ export default function TenantInvoicesPage() {
                         <div key={p.id} className="flex items-center justify-between rounded-md bg-muted p-3">
                           <div>
                             <span className="text-sm font-medium capitalize">
-                              {p.payment_method?.replace("_", " ") || "Payment"}
+                              {p.method?.replace(/_/g, " ") || "Payment"}
                             </span>
                             <p className="text-xs text-muted-foreground">
                               {format(new Date(p.created_at), "MMM d, yyyy")}

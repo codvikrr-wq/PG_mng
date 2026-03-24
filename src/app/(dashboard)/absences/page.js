@@ -64,23 +64,22 @@ export default function AbsencesPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
+      let absencesQ = supabase
         .from("absence_reports")
         .select("*, tenants(first_name, last_name), pgs(name)")
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
+      if (currentPg) absencesQ = absencesQ.eq("pg_id", currentPg.id);
+      if (statusFilter !== "all") absencesQ = absencesQ.eq("status", statusFilter);
 
-      if (currentPg) query = query.eq("pg_id", currentPg.id);
-      if (statusFilter !== "all") query = query.eq("status", statusFilter);
-
-      const { data } = await query;
-      setAbsences(data || []);
-
-      const { data: tenantData } = await supabase
+      const tenantsQ = supabase
         .from("tenants")
         .select("id, first_name, last_name, pg_id")
         .eq("organization_id", organization.id)
         .eq("status", "active");
+
+      const [{ data }, { data: tenantData }] = await Promise.all([absencesQ, tenantsQ]);
+      setAbsences(data || []);
       setTenants(tenantData || []);
     } catch (err) {
       console.error(err);

@@ -46,60 +46,64 @@ export default function OccupancyAnalyticsPage() {
     if (!organization) return;
 
     async function load() {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      let query = supabase
-        .from("beds")
-        .select("id, status, rooms(id, room_number, pgs(id, name))")
-        .eq("rooms.pgs.organization_id", organization.id);
+        let query = supabase
+          .from("beds")
+          .select("id, status, pg_id, rooms(id, name), pgs(id, name)")
+          .eq("organization_id", organization.id);
 
-      if (currentPg) {
-        query = query.eq("rooms.pgs.id", currentPg.id);
-      }
-
-      const { data: beds } = await query;
-
-      // Filter out beds where the join didn't match (null pgs due to inner filter)
-      const validBeds = (beds || []).filter((b) => b.rooms?.pgs);
-
-      const total = validBeds.length;
-      const occupied = validBeds.filter((b) => b.status === "occupied").length;
-      const available = validBeds.filter((b) => b.status === "available").length;
-      const maintenance = validBeds.filter((b) => b.status === "maintenance").length;
-
-      setSummary({ total, occupied, available, maintenance });
-
-      // Status pie chart
-      setStatusPieData([
-        { name: "Occupied", value: occupied },
-        { name: "Available", value: available },
-        { name: "Maintenance", value: maintenance },
-      ].filter((d) => d.value > 0));
-
-      // Group by PG
-      const pgMap = {};
-      validBeds.forEach((bed) => {
-        const pgName = bed.rooms.pgs.name;
-        const pgId = bed.rooms.pgs.id;
-        if (!pgMap[pgId]) {
-          pgMap[pgId] = { name: pgName, total: 0, occupied: 0, available: 0, maintenance: 0 };
+        if (currentPg) {
+          query = query.eq("pg_id", currentPg.id);
         }
-        pgMap[pgId].total += 1;
-        if (bed.status === "occupied") pgMap[pgId].occupied += 1;
-        else if (bed.status === "available") pgMap[pgId].available += 1;
-        else if (bed.status === "maintenance") pgMap[pgId].maintenance += 1;
-      });
 
-      const pgList = Object.values(pgMap);
-      setPgChartData(pgList.map((p) => ({ name: p.name, Occupied: p.occupied, Total: p.total })));
-      setPgBreakdown(
-        pgList.map((p) => ({
-          ...p,
-          occupancyRate: p.total > 0 ? ((p.occupied / p.total) * 100).toFixed(1) : "0.0",
-        }))
-      );
+        const { data: beds } = await query;
 
-      setLoading(false);
+        const validBeds = beds || [];
+
+        const total = validBeds.length;
+        const occupied = validBeds.filter((b) => b.status === "occupied").length;
+        const available = validBeds.filter((b) => b.status === "available").length;
+        const maintenance = validBeds.filter((b) => b.status === "maintenance").length;
+
+        setSummary({ total, occupied, available, maintenance });
+
+        // Status pie chart
+        setStatusPieData([
+          { name: "Occupied", value: occupied },
+          { name: "Available", value: available },
+          { name: "Maintenance", value: maintenance },
+        ].filter((d) => d.value > 0));
+
+        // Group by PG
+        const pgMap = {};
+        validBeds.forEach((bed) => {
+          if (!bed.pgs) return;
+          const pgName = bed.pgs.name;
+          const pgId = bed.pg_id;
+          if (!pgMap[pgId]) {
+            pgMap[pgId] = { name: pgName, total: 0, occupied: 0, available: 0, maintenance: 0 };
+          }
+          pgMap[pgId].total += 1;
+          if (bed.status === "occupied") pgMap[pgId].occupied += 1;
+          else if (bed.status === "available") pgMap[pgId].available += 1;
+          else if (bed.status === "maintenance") pgMap[pgId].maintenance += 1;
+        });
+
+        const pgList = Object.values(pgMap);
+        setPgChartData(pgList.map((p) => ({ name: p.name, Occupied: p.occupied, Total: p.total })));
+        setPgBreakdown(
+          pgList.map((p) => ({
+            ...p,
+            occupancyRate: p.total > 0 ? ((p.occupied / p.total) * 100).toFixed(1) : "0.0",
+          }))
+        );
+      } catch (err) {
+        console.error("Failed to load occupancy analytics:", err);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();

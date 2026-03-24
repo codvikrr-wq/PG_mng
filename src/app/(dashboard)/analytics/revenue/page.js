@@ -63,6 +63,7 @@ export default function RevenueAnalyticsPage() {
     if (!organization) return;
 
     async function load() {
+      try {
       setLoading(true);
       const now = new Date();
       let start, end;
@@ -92,59 +93,28 @@ export default function RevenueAnalyticsPage() {
       const startStr = format(start, "yyyy-MM-dd");
       const endStr = format(end, "yyyy-MM-dd");
 
-      // Revenue from payments
-      let paymentsQuery = supabase
-        .from("payments")
-        .select("amount, created_at, pg_id, pgs(name)")
-        .eq("organization_id", organization.id)
-        .eq("status", "completed")
-        .gte("created_at", startStr)
-        .lte("created_at", endStr);
-
-      if (currentPg) {
-        paymentsQuery = paymentsQuery.eq("pg_id", currentPg.id);
-      }
-
-      const { data: payments } = await paymentsQuery;
-
-      const totalRevenue = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
-
-      // Expenses
-      let expQuery = supabase
-        .from("expenses")
-        .select("amount, category, date, pg_id")
-        .eq("organization_id", organization.id)
-        .gte("date", startStr)
-        .lte("date", endStr);
-
-      if (currentPg) {
-        expQuery = expQuery.eq("pg_id", currentPg.id);
-      }
-
-      const { data: expenses } = await expQuery;
-
-      const totalExpenses = (expenses || []).reduce((s, e) => s + Number(e.amount), 0);
-      const netProfit = totalRevenue - totalExpenses;
-
-      // Month-over-month growth: compare current period revenue to prior period
+      // Month-over-month growth period
       const periodDuration = end.getTime() - start.getTime();
       const priorStart = new Date(start.getTime() - periodDuration);
       const priorStartStr = format(priorStart, "yyyy-MM-dd");
       const priorEndStr = format(new Date(start.getTime() - 1), "yyyy-MM-dd");
 
-      let priorQuery = supabase
-        .from("payments")
-        .select("amount")
-        .eq("organization_id", organization.id)
-        .eq("status", "completed")
-        .gte("created_at", priorStartStr)
-        .lte("created_at", priorEndStr);
-
+      // Build all 3 queries
+      let paymentsQuery = supabase.from("payments").select("amount, created_at, pg_id, pgs(name)").eq("organization_id", organization.id).eq("status", "completed").gte("created_at", startStr).lte("created_at", endStr);
+      let expQuery = supabase.from("expenses").select("amount, category, date, pg_id").eq("organization_id", organization.id).gte("date", startStr).lte("date", endStr);
+      let priorQuery = supabase.from("payments").select("amount").eq("organization_id", organization.id).eq("status", "completed").gte("created_at", priorStartStr).lte("created_at", priorEndStr);
       if (currentPg) {
+        paymentsQuery = paymentsQuery.eq("pg_id", currentPg.id);
+        expQuery = expQuery.eq("pg_id", currentPg.id);
         priorQuery = priorQuery.eq("pg_id", currentPg.id);
       }
 
-      const { data: priorPayments } = await priorQuery;
+      // Fire all 3 in parallel
+      const [{ data: payments }, { data: expenses }, { data: priorPayments }] = await Promise.all([paymentsQuery, expQuery, priorQuery]);
+
+      const totalRevenue = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
+      const totalExpenses = (expenses || []).reduce((s, e) => s + Number(e.amount), 0);
+      const netProfit = totalRevenue - totalExpenses;
       const priorRevenue = (priorPayments || []).reduce((s, p) => s + Number(p.amount), 0);
       const growth = priorRevenue > 0 ? (((totalRevenue - priorRevenue) / priorRevenue) * 100) : 0;
 
@@ -185,7 +155,11 @@ export default function RevenueAnalyticsPage() {
         Object.entries(catMap).map(([name, value]) => ({ name, value }))
       );
 
-      setLoading(false);
+      } catch (err) {
+        console.error("Failed to load revenue analytics:", err);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();

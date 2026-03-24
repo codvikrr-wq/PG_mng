@@ -98,24 +98,22 @@ export default function ComplaintsPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
+      let complaintsQ = supabase
         .from("complaints")
         .select("*, tenants(first_name, last_name), pgs(name)")
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
+      if (currentPg) complaintsQ = complaintsQ.eq("pg_id", currentPg.id);
+      if (statusFilter !== "all") complaintsQ = complaintsQ.eq("status", statusFilter);
 
-      if (currentPg) query = query.eq("pg_id", currentPg.id);
-      if (statusFilter !== "all") query = query.eq("status", statusFilter);
-
-      const { data } = await query;
-      setComplaints(data || []);
-
-      // Load tenants for the create form
-      const { data: tenantData } = await supabase
+      const tenantsQ = supabase
         .from("tenants")
         .select("id, first_name, last_name, pg_id")
         .eq("organization_id", organization.id)
         .eq("status", "active");
+
+      const [{ data }, { data: tenantData }] = await Promise.all([complaintsQ, tenantsQ]);
+      setComplaints(data || []);
       setTenants(tenantData || []);
     } catch (err) {
       console.error(err);
@@ -219,7 +217,18 @@ export default function ComplaintsPage() {
       if (selectedComplaint?.id === complaintId) {
         setSelectedComplaint((prev) => ({ ...prev, ...updates }));
       }
-      toast.success(`Status updated to ${newStatus}`);
+
+      // Trigger complaint-update email (best-effort)
+      try {
+        const complaint = complaints.find((c) => c.id === complaintId);
+        if (complaint?.tenant_id) {
+          await supabase.functions.invoke("send-complaint-update", {
+            body: { complaintId, tenantId: complaint.tenant_id, newStatus },
+          });
+        }
+      } catch (_) {}
+
+      toast.success(`Status updated to ${newStatus.replace("_", " ")}`);
     } catch (error) {
       toast.error(error.message);
     }

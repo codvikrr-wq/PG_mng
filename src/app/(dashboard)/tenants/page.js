@@ -116,7 +116,7 @@ export default function TenantsPage() {
       if (search.trim()) {
         const term = `%${search.trim()}%`;
         query = query.or(
-          `full_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`
+          `first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`
         );
       }
 
@@ -131,41 +131,22 @@ export default function TenantsPage() {
       setTenants(data || []);
       setTotalCount(count || 0);
 
-      // Load related rooms and beds for the returned tenants
-      const roomIds = [
-        ...new Set((data || []).map((t) => t.room_id).filter(Boolean)),
-      ];
-      const bedIds = [
-        ...new Set((data || []).map((t) => t.bed_id).filter(Boolean)),
-      ];
+      // Load related rooms and beds for the returned tenants in parallel
+      const roomIds = [...new Set((data || []).map((t) => t.room_id).filter(Boolean))];
+      const bedIds = [...new Set((data || []).map((t) => t.bed_id).filter(Boolean))];
 
-      if (roomIds.length > 0) {
-        const { data: rooms } = await supabase
-          .from("rooms")
-          .select("id, name")
-          .in("id", roomIds);
-        const map = {};
-        (rooms || []).forEach((r) => {
-          map[r.id] = r.name;
-        });
-        setRoomMap(map);
-      } else {
-        setRoomMap({});
-      }
+      const [roomsResult, bedsResult] = await Promise.all([
+        roomIds.length > 0 ? supabase.from("rooms").select("id, name").in("id", roomIds) : Promise.resolve({ data: [] }),
+        bedIds.length > 0 ? supabase.from("beds").select("id, bed_number").in("id", bedIds) : Promise.resolve({ data: [] }),
+      ]);
 
-      if (bedIds.length > 0) {
-        const { data: beds } = await supabase
-          .from("beds")
-          .select("id, bed_number")
-          .in("id", bedIds);
-        const map = {};
-        (beds || []).forEach((b) => {
-          map[b.id] = b.bed_number;
-        });
-        setBedMap(map);
-      } else {
-        setBedMap({});
-      }
+      const roomMap = {};
+      (roomsResult.data || []).forEach((r) => { roomMap[r.id] = r.name; });
+      setRoomMap(roomMap);
+
+      const bedMap = {};
+      (bedsResult.data || []).forEach((b) => { bedMap[b.id] = b.bed_number; });
+      setBedMap(bedMap);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load tenants");
@@ -322,11 +303,11 @@ export default function TenantsPage() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           <AvatarImage
-                            src={tenant.photo_url}
-                            alt={tenant.full_name}
+                            src={tenant.profile_photo_url}
+                            alt={`${tenant.first_name} ${tenant.last_name}`}
                           />
                           <AvatarFallback className="text-xs">
-                            {getInitials(tenant.full_name)}
+                            {getInitials(`${tenant.first_name} ${tenant.last_name}`)}
                           </AvatarFallback>
                         </Avatar>
                         <div>
@@ -334,7 +315,7 @@ export default function TenantsPage() {
                             href={`/tenants/${tenant.id}`}
                             className="font-medium hover:underline"
                           >
-                            {tenant.full_name}
+                            {tenant.first_name} {tenant.last_name}
                           </Link>
                           {tenant.email && (
                             <p className="text-xs text-muted-foreground">

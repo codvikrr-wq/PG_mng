@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useOrg } from "@/context/org-context";
-import { useUser } from "@/context/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -12,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -26,11 +25,10 @@ import { toast } from "sonner";
 import { CalendarClock, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 
 const FREQUENCIES = ["daily", "weekly", "monthly"];
-const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const SCHEDULE_TYPES = ["cleaning", "laundry", "pest_control", "maintenance", "inspection", "other"];
 
 export default function HousekeepingSchedulesPage() {
   const { organization, currentPg, pgs } = useOrg();
-  const { user } = useUser();
   const supabase = createClient();
 
   const [schedules, setSchedules] = useState([]);
@@ -46,40 +44,27 @@ export default function HousekeepingSchedulesPage() {
   const [pgId, setPgId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
-  const [task, setTask] = useState("");
+  const [type, setType] = useState("");
   const [frequency, setFrequency] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState("");
-  const [timeSlot, setTimeSlot] = useState("");
-  const [isActive, setIsActive] = useState(true);
+  const [notes, setNotes] = useState("");
 
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
+      let schedulesQ = supabase
         .from("housekeeping_schedules")
-        .select("*, rooms(room_number), users:assigned_to(full_name), pgs(name)")
+        .select("*, users:assigned_to(first_name, last_name), pgs(name)")
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
+      if (currentPg) schedulesQ = schedulesQ.eq("pg_id", currentPg.id);
 
-      if (currentPg) query = query.eq("pg_id", currentPg.id);
-      const { data } = await query;
+      const [{ data }, { data: roomData }, { data: staffData }] = await Promise.all([
+        schedulesQ,
+        supabase.from("rooms").select("id, name, pg_id").eq("organization_id", organization.id).order("name"),
+        supabase.from("users").select("id, first_name, last_name").eq("organization_id", organization.id).order("first_name"),
+      ]);
       setSchedules(data || []);
-
-      // Load rooms for this org
-      const { data: roomData } = await supabase
-        .from("rooms")
-        .select("id, room_number, pg_id")
-        .eq("organization_id", organization.id)
-        .order("room_number");
       setRooms(roomData || []);
-
-      // Load staff users (non-tenant roles)
-      const { data: staffData } = await supabase
-        .from("users")
-        .select("id, full_name")
-        .eq("organization_id", organization.id)
-        .neq("system_role", "Tenant")
-        .order("full_name");
       setStaffUsers(staffData || []);
     } catch (err) {
       console.error(err);
@@ -97,30 +82,26 @@ export default function HousekeepingSchedulesPage() {
     setPgId(currentPg?.id || "");
     setRoomId("");
     setAssignedTo("");
-    setTask("");
+    setType("");
     setFrequency("");
-    setDayOfWeek("");
-    setTimeSlot("");
-    setIsActive(true);
+    setNotes("");
     setDialogOpen(true);
   }
 
   function openEdit(s) {
     setEditing(s);
     setPgId(s.pg_id || "");
-    setRoomId(s.room_id || "");
+    setRoomId((s.rooms_assigned && s.rooms_assigned[0]) || "");
     setAssignedTo(s.assigned_to || "");
-    setTask(s.task || "");
+    setType(s.type || "");
     setFrequency(s.frequency || "");
-    setDayOfWeek(s.day_of_week || "");
-    setTimeSlot(s.time_slot || "");
-    setIsActive(s.is_active ?? true);
+    setNotes(s.notes || "");
     setDialogOpen(true);
   }
 
   async function handleSave() {
-    if (!task || !frequency) {
-      toast.error("Task and frequency are required");
+    if (!type || !frequency) {
+      toast.error("Type and frequency are required");
       return;
     }
     setCreating(true);
@@ -128,21 +109,21 @@ export default function HousekeepingSchedulesPage() {
       const payload = {
         organization_id: organization.id,
         pg_id: pgId || null,
-        room_id: roomId || null,
         assigned_to: assignedTo || null,
-        task,
+        type,
         frequency,
-        day_of_week: frequency === "weekly" ? dayOfWeek || null : null,
-        time_slot: timeSlot || null,
-        is_active: isActive,
+        rooms_assigned: roomId ? [roomId] : [],
+        notes: notes || null,
       };
+
+      const selectQuery = "*, users:assigned_to(first_name, last_name), pgs(name)";
 
       if (editing) {
         const { data, error } = await supabase
           .from("housekeeping_schedules")
           .update(payload)
           .eq("id", editing.id)
-          .select("*, rooms(room_number), users:assigned_to(full_name), pgs(name)")
+          .select(selectQuery)
           .single();
         if (error) throw error;
         setSchedules((prev) => prev.map((s) => (s.id === data.id ? data : s)));
@@ -151,7 +132,7 @@ export default function HousekeepingSchedulesPage() {
         const { data, error } = await supabase
           .from("housekeeping_schedules")
           .insert(payload)
-          .select("*, rooms(room_number), users:assigned_to(full_name), pgs(name)")
+          .select(selectQuery)
           .single();
         if (error) throw error;
         setSchedules((prev) => [data, ...prev]);
@@ -203,34 +184,24 @@ export default function HousekeepingSchedulesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Task</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>PG</TableHead>
-                <TableHead>Room</TableHead>
                 <TableHead>Assigned To</TableHead>
                 <TableHead>Frequency</TableHead>
-                <TableHead>Day</TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Notes</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {schedules.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.task}</TableCell>
+                  <TableCell className="font-medium capitalize">{s.type?.replace(/_/g, " ")}</TableCell>
                   <TableCell>{s.pgs?.name || "—"}</TableCell>
-                  <TableCell>{s.rooms?.room_number || "—"}</TableCell>
-                  <TableCell>{s.users?.full_name || "—"}</TableCell>
+                  <TableCell>{s.users ? `${s.users.first_name || ""} ${s.users.last_name || ""}`.trim() : "—"}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="capitalize">{s.frequency}</Badge>
                   </TableCell>
-                  <TableCell>{s.frequency === "weekly" ? s.day_of_week || "—" : "—"}</TableCell>
-                  <TableCell>{s.time_slot || "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant={s.is_active ? "default" : "secondary"}>
-                      {s.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{s.notes || "—"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
@@ -255,8 +226,15 @@ export default function HousekeepingSchedulesPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Task</Label>
-              <Input value={task} onChange={(e) => setTask(e.target.value)} placeholder="e.g. Floor mopping, Bathroom cleaning" />
+              <Label>Type <span className="text-destructive">*</span></Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                <SelectContent>
+                  {SCHEDULE_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="capitalize">{t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -264,6 +242,7 @@ export default function HousekeepingSchedulesPage() {
                 <Select value={pgId} onValueChange={(val) => { setPgId(val); setRoomId(""); }}>
                   <SelectTrigger><SelectValue placeholder="Select PG" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">All PGs</SelectItem>
                     {pgs.map((pg) => <SelectItem key={pg.id} value={pg.id}>{pg.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -274,24 +253,14 @@ export default function HousekeepingSchedulesPage() {
                   <SelectTrigger><SelectValue placeholder="Select Room" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All Rooms</SelectItem>
-                    {filteredRooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.room_number}</SelectItem>)}
+                    {filteredRooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Assigned To</Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
-                <SelectTrigger><SelectValue placeholder="Select Staff" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
-                  {staffUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Frequency</Label>
+                <Label>Frequency <span className="text-destructive">*</span></Label>
                 <Select value={frequency} onValueChange={setFrequency}>
                   <SelectTrigger><SelectValue placeholder="Select Frequency" /></SelectTrigger>
                   <SelectContent>
@@ -299,25 +268,20 @@ export default function HousekeepingSchedulesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {frequency === "weekly" && (
-                <div className="space-y-2">
-                  <Label>Day of Week</Label>
-                  <Select value={dayOfWeek} onValueChange={setDayOfWeek}>
-                    <SelectTrigger><SelectValue placeholder="Select Day" /></SelectTrigger>
-                    <SelectContent>
-                      {DAYS_OF_WEEK.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>Assigned To</Label>
+                <Select value={assignedTo} onValueChange={setAssignedTo}>
+                  <SelectTrigger><SelectValue placeholder="Select Staff" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {staffUsers.map((u) => <SelectItem key={u.id} value={u.id}>{`${u.first_name || ""} ${u.last_name || ""}`.trim()}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Time Slot</Label>
-              <Input type="time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={isActive} onCheckedChange={setIsActive} />
-              <Label>Active</Label>
+              <Label>Notes</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any special instructions..." />
             </div>
           </div>
           <DialogFooter>

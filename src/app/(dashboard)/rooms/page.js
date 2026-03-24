@@ -76,35 +76,22 @@ export default function RoomsPage() {
   const loadData = useCallback(async () => {
     if (!organization) return;
     try {
-      let query = supabase
-        .from("rooms")
-        .select("*")
-        .eq("organization_id", organization.id)
-        .order("name");
-
+      let roomsQ = supabase.from("rooms").select("*").eq("organization_id", organization.id).order("name");
+      let bedsQ = supabase.from("beds").select("*").eq("organization_id", organization.id).order("bed_number");
       if (currentPg) {
-        query = query.eq("pg_id", currentPg.id);
+        roomsQ = roomsQ.eq("pg_id", currentPg.id);
+        bedsQ = bedsQ.eq("pg_id", currentPg.id);
       }
 
-      const { data: roomData } = await query;
+      const [{ data: roomData }, { data: bedData }] = await Promise.all([roomsQ, bedsQ]);
       setRooms(roomData || []);
 
-      // Load beds grouped by room
-      if (roomData && roomData.length > 0) {
-        const roomIds = roomData.map((r) => r.id);
-        const { data: bedData } = await supabase
-          .from("beds")
-          .select("*")
-          .in("room_id", roomIds)
-          .order("bed_number");
-
-        const grouped = {};
-        (bedData || []).forEach((b) => {
-          if (!grouped[b.room_id]) grouped[b.room_id] = [];
-          grouped[b.room_id].push(b);
-        });
-        setBeds(grouped);
-      }
+      const grouped = {};
+      (bedData || []).forEach((b) => {
+        if (!grouped[b.room_id]) grouped[b.room_id] = [];
+        grouped[b.room_id].push(b);
+      });
+      setBeds(grouped);
     } catch (err) {
       console.error(err);
     } finally {

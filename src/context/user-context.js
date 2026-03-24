@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const UserContext = createContext(null);
@@ -9,24 +9,23 @@ export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabaseRef = useRef(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+  const supabase = supabaseRef.current;
 
   useEffect(() => {
     async function getUser() {
       try {
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const authUser = session?.user ?? null;
 
         if (authUser) {
           setUser(authUser);
-
           const { data: profileData } = await supabase
             .from("users")
             .select("*, user_roles(*, roles(*))")
             .eq("id", authUser.id)
             .single();
-
           setProfile(profileData);
         }
       } catch (error) {
