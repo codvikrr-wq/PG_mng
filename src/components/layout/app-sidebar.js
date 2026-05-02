@@ -185,15 +185,17 @@ function StickyOrgFooter({ organization }) {
 
 export function AppSidebar() {
   const { organization } = useOrg();
-  const logoSrc = "/logo_new.png";
+  const logoSrc = "/logo_staysaathi.png";
 
   return (
     <>
       <MobileCloser />
       <Sidebar>
-        {/* Product logo — centered in the h-14 header, shown on all screen sizes inside sidebar */}
-        <SidebarHeader className="border-b h-14 flex items-center justify-center px-4">
-          <div className="relative h-9 w-full flex items-center justify-center">
+        {/* Product logo — sidebar header height matches top-bar (h-14) so the two align across the layout.
+            Logo container is capped at h-10 inside the h-14 bar, leaving 8px of vertical breathing room.
+            object-contain ensures the wide StaySaathi mark scales down to fit width without ever exceeding header height. */}
+        <SidebarHeader className="border-b h-14 flex items-center justify-center px-3">
+          <div className="relative h-10 w-full flex items-center justify-center">
             <Image
               src={logoSrc}
               alt="Logo"
